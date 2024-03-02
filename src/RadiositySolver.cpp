@@ -15,8 +15,8 @@ static vec3 barycentricCoordinates(const vec2 vertices[3], const vec2& point) {
     return barycentric / area;
 }
 
-static std::pair<bool, float> rayTriangleIntersection(const vec3& rayOrigin, const vec3& rayDirection, const vec3 vertices[3], const vec3& normal) {
-    constexpr auto epsilon = 0.0001f;
+static std::pair<bool, float> rayTriangleIntersection(const vec3& rayOrigin, const vec3& rayDirection, const vec3 vertices[3]) {
+    constexpr auto epsilon = 0.001f;
 
     // Möller–Trumbore intersection algorithm
 
@@ -48,39 +48,60 @@ static std::pair<bool, float> rayTriangleIntersection(const vec3& rayOrigin, con
     return {true, t};
 }
 
-float RadiositySolver::calculateVisibility(const Patch& source, const Patch& destination) {
-    auto destinationDistance = glm::length(destination.center - source.center);
-
-    auto rayOrigin = source.center;
-    auto rayDirection = (destination.center - source.center) / destinationDistance;
-    for (const auto& face : m_scene->faces) {
-        if (face == *source.face || face == *destination.face)
-            continue;
-
-        auto [intersects, t] = rayTriangleIntersection(rayOrigin, rayDirection, face.vertices, face.normal);
-        if (!intersects)
-            continue;
-
-        if (t < destinationDistance - 0.001f) // leeway for shared edges passing through the lightmap
-            return 0;
-    }
-
-    return 1;
+static vec3 randomPointOnPatch(const Patch& patch) {
+    auto edge0 = patch.vertices[1] - patch.vertices[0];
+    auto edge1 = patch.vertices[3] - patch.vertices[0];
+    return patch.vertices[0] + random<float>() * edge0 + random<float>() * edge1;
 }
 
-float RadiositySolver::calculateFormFactor(const Patch& source, const Patch& destination) {
-    auto direction = destination.center - source.center;
-    auto distance = glm::length(direction);
-    direction /= distance;
+float RadiositySolver::calculateFormFactor(const Patch& patchA, const Patch& patchB) {
+    float F = 0;
 
-    auto cosine = glm::dot(source.face->normal, direction) * glm::dot(destination.face->normal, -direction);
-    auto V = calculateVisibility(source, destination);
-    float F = cosine / (PI * distance * distance) * V;
-    return glm::max(0.0f, F);
+    constexpr auto rayCount = 8;
+    for (uint32_t i = 0; i < rayCount; i++) {
+        auto rayOrigin = randomPointOnPatch(patchA);
+        auto rayTarget = randomPointOnPatch(patchB);
+
+        // visibility test
+        auto targetDistance = glm::length(rayTarget - rayOrigin);
+        auto rayDirection = (rayTarget - rayOrigin) / targetDistance;
+        bool hit = false;
+        for (const auto& face : m_scene->faces) {
+            if (glm::dot(rayDirection, face.normal) > 0.01f)
+                continue;
+
+            if (face == *patchA.face || face == *patchB.face)
+                continue;
+
+            auto [intersects, t] = rayTriangleIntersection(rayOrigin, rayDirection, face.vertices);
+            if (!intersects)
+                continue;
+
+            if (t < targetDistance - 0.01f) {  // leeway for shared edges passing through the lightmap
+                hit = true;
+                break;
+            }
+        }
+
+        if (hit)  // visibility test failed
+            continue;
+
+        auto r2 = glm::length2(rayTarget - rayOrigin);
+        auto cosines = glm::dot(rayDirection, patchA.face->normal) * glm::dot(-rayDirection, patchB.face->normal);
+        auto deltaF = cosines * patchB.area / (PI * r2);  // + patchB.area / rayCount);
+
+        if (deltaF > 0)
+            F += deltaF;
+    }
+
+    return F / rayCount;
 }
 
 void RadiositySolver::initialize(const Ref<Scene>& scene) {
     m_scene = scene;
+
+    auto maxResiduePatch = uvec2(0, 0);
+    float maxResidue2 = 0;  // squared magnitude
 
     auto texelSize = 1.0f / vec2(m_lightmapPatches.size());
     for (auto& face : m_scene->faces) {
@@ -112,9 +133,18 @@ void RadiositySolver::initialize(const Ref<Scene>& scene) {
                     continue;
 
                 m_lightmapPatches[uvec2(x, y)] = Patch(patchVertices, &face);
-                m_lightmapAccumulated[uvec2(x, y)] = m_lightmapPatches[uvec2(x, y)].residue;
+                auto residue = m_lightmapPatches[uvec2(x, y)].residue;
+                m_lightmapAccumulated[uvec2(x, y)] = residue;
+
+                auto residueMagnitude2 = glm::length2(residue);
+                if (residueMagnitude2 > maxResidue2) {
+                    maxResidue2 = residueMagnitude2;
+                    maxResiduePatch = uvec2(x, y);
+                }
             }
         }
+
+        m_maxResiduePatch = maxResiduePatch;
     }
 }
 
@@ -127,43 +157,56 @@ void RadiositySolver::solve(float residueEpsilon, uint32_t iterations) {
 }
 
 float RadiositySolver::shoot(float residueEpsilon) {
-    // find the patch with the largest residue
-    auto& shootingPatch = m_lightmapPatches[uvec2(0, 0)];
-    auto maxResidue = glm::length2(shootingPatch.residue);
-    for (uint32_t y = 0; y < m_lightmapSize.y; y++) {
-        for (uint32_t x = 0; x < m_lightmapSize.x; x++) {
-            auto& patch = m_lightmapPatches[uvec2(x, y)];
-            if (patch.face == nullptr)
-                continue;
+    // get the patch with the largest residue
+    auto& shootingPatch = m_lightmapPatches[m_maxResiduePatch];
+    auto shotRad = glm::length(shootingPatch.residue);
 
-            auto residueMagnitude = glm::length2(patch.residue);
-            if (residueMagnitude >= maxResidue) {
-                maxResidue = residueMagnitude;
-                shootingPatch = patch;
-            }
-        }
-    }
-    maxResidue = glm::sqrt(maxResidue);
-
-    if (maxResidue <= residueEpsilon)
+    if (shotRad <= residueEpsilon)
         return 0;  // nothing to solve
+
+    auto maxResiduePatch = uvec2(0, 0);
+    float maxResidue2 = 0;  // squared magnitude
+
+    float reflectedRad = 0;
 
     // shoot to other patches
     for (uint32_t y = 0; y < m_lightmapSize.y; y++) {
         for (uint32_t x = 0; x < m_lightmapSize.x; x++) {
-            auto& destinationPatch = m_lightmapPatches[uvec2(x, y)];
-            if (destinationPatch.face == nullptr || destinationPatch == shootingPatch)
+            auto& receivingPatch = m_lightmapPatches[uvec2(x, y)];
+            if (receivingPatch.face == nullptr || receivingPatch == shootingPatch)
                 continue;
 
-            auto F = calculateFormFactor(shootingPatch, destinationPatch);
-            // auto dA = destinationPatch.area / shootingPatch.area;
-            auto radDelta = F * shootingPatch.residue * destinationPatch.face->material->albedo;
-            destinationPatch.residue += radDelta;
-            m_lightmapAccumulated[uvec2(x, y)] += radDelta;
+            // check for max residue canditate before possible skipping
+            auto residueMagnitude2 = glm::length2(receivingPatch.residue);
+            if (residueMagnitude2 > maxResidue2) {
+                maxResidue2 = residueMagnitude2;
+                maxResiduePatch = uvec2(x, y);
+            }
+
+            if (receivingPatch.face == shootingPatch.face)
+                continue;
+
+            auto F = calculateFormFactor(shootingPatch, receivingPatch);
+            if (F == 0)
+                continue;
+
+            auto deltaRad = receivingPatch.face->material->albedo * shootingPatch.residue * F * shootingPatch.area / receivingPatch.area;
+            receivingPatch.residue += deltaRad;
+            m_lightmapAccumulated[uvec2(x, y)] += deltaRad;
+            reflectedRad += glm::length(deltaRad);
+
+            // check for max residue canditate
+            residueMagnitude2 = glm::length2(receivingPatch.residue);
+            if (residueMagnitude2 > maxResidue2) {
+                maxResidue2 = residueMagnitude2;
+                maxResiduePatch = uvec2(x, y);
+            }
         }
     }
 
     shootingPatch.residue = vec3(0);
-    LOG("residue=" << maxResidue);
-    return maxResidue;  // return the amount of light shot
+    m_maxResiduePatch = maxResiduePatch;
+
+    LOG(std::format("shotRad={:.04f} reflectedRadPer={:.02f}", shotRad , reflectedRad / shotRad));
+    return shotRad;  // return the amount of light shot
 }

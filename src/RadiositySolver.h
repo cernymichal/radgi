@@ -17,7 +17,7 @@ struct Patch {
         memcpy(this->vertices, vertices, sizeof(this->vertices));
         center = (vertices[0] + vertices[1] + vertices[2] + vertices[3]) / 4.0f;
         area = glm::length(glm::cross(vertices[1] - vertices[0], vertices[3] - vertices[0]));
-        residue = face->material->emission * area;
+        residue = face->material->emission;  //* area;
     }
 
     bool operator==(const Patch& other) const {
@@ -47,9 +47,9 @@ private:
     Texture<Patch> m_lightmapPatches;
     Texture<vec3> m_lightmapAccumulated;
 
-    float shoot(float residueEpsilon = 0);
+    uvec2 m_maxResiduePatch = uvec2(0);
 
-    float calculateVisibility(const Patch& source, const Patch& destination);
+    float shoot(float residueEpsilon = 0);
 
     float calculateFormFactor(const Patch& source, const Patch& destination);
 };
