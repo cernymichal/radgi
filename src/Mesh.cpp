@@ -51,17 +51,21 @@ std::vector<Face> loadMesh(const std::string& filePath) {
                 tinyobj::real_t vz = attrib.vertices[3 * size_t(idx.vertex_index) + 2];
                 face.vertices[v] = vec3(vx, vy, vz);
 
+                /*
                 assert(idx.normal_index >= 0);
                 tinyobj::real_t nx = attrib.normals[3 * size_t(idx.normal_index) + 0];
                 tinyobj::real_t ny = attrib.normals[3 * size_t(idx.normal_index) + 1];
                 tinyobj::real_t nz = attrib.normals[3 * size_t(idx.normal_index) + 2];
                 face.normal = vec3(nx, ny, nz);
+                */
 
                 assert(idx.normal_index >= 0);
                 tinyobj::real_t tx = attrib.texcoords[2 * size_t(idx.texcoord_index) + 0];
                 tinyobj::real_t ty = attrib.texcoords[2 * size_t(idx.texcoord_index) + 1];
                 face.lightmapUVs[v] = vec2(tx, ty);
             }
+            face.normal = glm::normalize(glm::cross(face.vertices[1] - face.vertices[0], face.vertices[2] - face.vertices[0]));
+
             index_offset += fv;
         }
     }
