@@ -41,6 +41,8 @@ public:
         return m_lightmapAccumulated;
     }
 
+    void extrapolateLightmap(uint32_t radius = 2);
+
 private:
     Ref<Scene> m_scene;
     uvec2 m_lightmapSize;

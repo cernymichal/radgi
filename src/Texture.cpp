@@ -8,6 +8,7 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb_image_write.h>
 
+template class Texture<bool>;
 template class Texture<float>;
 template class Texture<uint64_t>;
 template class Texture<vec2>;
@@ -50,6 +51,9 @@ Texture<T>::Texture(const std::filesystem::path& filePath) {
 
 template <typename T>
 Texture<T>::~Texture() {
+    if (!m_data)
+		return;
+
     if (m_stbLoaded)
         stbi_image_free(m_data);
     else

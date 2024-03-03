@@ -9,6 +9,28 @@ public:
 
     Texture(const std::filesystem::path& filePath);
 
+    Texture(const Texture& other) = delete;
+
+    Texture(Texture&& other) noexcept {
+        m_size = other.m_size;
+        m_data = other.m_data;
+        m_stbLoaded = other.m_stbLoaded;
+
+        other.m_data = nullptr;
+    }
+
+    Texture& operator=(const Texture& other) = delete;
+
+    Texture& operator=(Texture&& other) noexcept {
+        m_size = other.m_size;
+        m_data = other.m_data;
+        m_stbLoaded = other.m_stbLoaded;
+
+        other.m_data = nullptr;
+
+        return *this;
+    }
+
     ~Texture();
 
     const T& operator[](const vec2& pos) const {

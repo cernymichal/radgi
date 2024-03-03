@@ -8,7 +8,12 @@ int main() {
 
     RadiositySolver solver(lightmapSize);
     solver.initialize(scene);
-    solver.solve(0.1f);
+
+    LOG("Solving");
+    solver.solve(0.15f);
+
+    LOG("Extrapolating lightmap");
+    solver.extrapolateLightmap();
 
     solver.lightmap().save("lightmap.hdr");
 

@@ -207,6 +207,42 @@ float RadiositySolver::shoot(float residueEpsilon) {
     shootingPatch.residue = vec3(0);
     m_maxResiduePatch = maxResiduePatch;
 
-    LOG(std::format("shotRad={:.04f} reflectedRadPer={:.02f}", shotRad , reflectedRad / shotRad));
+    // LOG(std::format("shotRad={:.04f} reflectedRadPer={:.02f}", shotRad , reflectedRad / shotRad));
     return shotRad;  // return the amount of light shot
+}
+
+void RadiositySolver::extrapolateLightmap(uint32_t radius) {
+    Texture<bool> extrapolatedThisIter(m_lightmapSize);
+    for (uint32_t i = 0; i < radius; i++) {
+        extrapolatedThisIter.clear(false);
+        for (uint32_t y = 0; y < m_lightmapSize.y; y++) {
+            for (uint32_t x = 0; x < m_lightmapSize.x; x++) {
+                auto idx = uvec2(x, y);
+
+                if (m_lightmapPatches[idx].face != nullptr)
+                    continue;
+
+                for (int32_t dy = -1; dy <= 1; dy++) {
+                    for (int32_t dx = -1; dx <= 1; dx++) {
+                        if (abs(dx) == 1 && abs(dy) == 1)
+                            continue;
+
+                        if (x + dx < 0 || x + dx >= m_lightmapSize.x || y + dy < 0 || y + dy >= m_lightmapSize.y)
+                            continue;
+
+                        auto sampleIdx = uvec2(x + dx, y + dy);
+
+                        if (m_lightmapPatches[sampleIdx].face != nullptr && !extrapolatedThisIter[sampleIdx]) {
+                            m_lightmapAccumulated[idx] = m_lightmapAccumulated[sampleIdx];
+                            m_lightmapPatches[idx].face = m_lightmapPatches[sampleIdx].face;
+                            extrapolatedThisIter[idx] = true;
+                            break;
+                        }
+                    }
+                    if (extrapolatedThisIter[idx])
+                        break;
+                }
+            }
+        }
+    }
 }
