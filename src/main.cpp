@@ -13,7 +13,7 @@ Options:
 
 	-r, --resolution <resolution>   Lightmap resolution (128 by default)
 
-	-t, --threshold <threshold>     Residue threshold for terminating (0.25 by default)
+	-t, --threshold <threshold>     Residue threshold for terminating (0.2 by default)
                                     This is the default mode - progressive refinement.
                                     The scene is solved until the maximum patch residue is below the threshold.
 
@@ -26,7 +26,7 @@ Options:
 
 
 Example:
-	radgi resources/cornell_box.obj -o lightmap.hdr -r 256 -t 0.3)";
+	radgi resources/cornell_box/cornell_box.obj -o lightmap.hdr -r 256 -t 0.01)";
 
 int main(int argc, char* argv[]) {
     argh::parser cmdl(argc, argv, argh::parser::PREFER_PARAM_FOR_UNREG_OPTION);
@@ -44,7 +44,7 @@ int main(int argc, char* argv[]) {
     cmdl({"-r", "--resolution"}, 128) >> resolution;
 
     float threshold;
-    cmdl({"-t", "--threshold"}, 0.25f) >> threshold;
+    cmdl({"-t", "--threshold"}, 0.2f) >> threshold;
     bool useProgressive = true;
 
     uint32_t iterations;

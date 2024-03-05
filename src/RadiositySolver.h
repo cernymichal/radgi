@@ -55,5 +55,5 @@ private:
 
     float shoot(uvec2 source, float residueThreshold = 0);
 
-    float calculateFormFactor(const Patch& source, const Patch& destination);
+    std::pair<float, float> calculateFormFactor(const Patch& source, const Patch& destination);
 };

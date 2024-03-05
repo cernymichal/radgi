@@ -54,10 +54,11 @@ static vec3 randomPointOnPatch(const Patch& patch) {
     return patch.vertices[0] + random<float>() * edge0 + random<float>() * edge1;
 }
 
-float RadiositySolver::calculateFormFactor(const Patch& patchA, const Patch& patchB) {
+std::pair<float, float> RadiositySolver::calculateFormFactor(const Patch& patchA, const Patch& patchB) {
     float F = 0;
+    float visibility = 0;
 
-    constexpr auto rayCount = 8;
+    constexpr auto rayCount = 8;  // TODO make this a parameter
     for (uint32_t i = 0; i < rayCount; i++) {
         auto rayOrigin = randomPointOnPatch(patchA);
         auto rayTarget = randomPointOnPatch(patchB);
@@ -65,9 +66,13 @@ float RadiositySolver::calculateFormFactor(const Patch& patchA, const Patch& pat
         // visibility test
         auto targetDistance = glm::length(rayTarget - rayOrigin);
         auto rayDirection = (rayTarget - rayOrigin) / targetDistance;
+
+        if (glm::dot(rayDirection, patchA.face->normal) <= 0 || glm::dot(-rayDirection, patchB.face->normal) <= 0)
+            continue;
+
         bool hit = false;
         for (const auto& face : m_scene->faces) {
-            if (glm::dot(rayDirection, face.normal) > 0.01f)
+            if (glm::dot(-rayDirection, face.normal) <= 0)
                 continue;
 
             if (face == *patchA.face || face == *patchB.face)
@@ -86,6 +91,8 @@ float RadiositySolver::calculateFormFactor(const Patch& patchA, const Patch& pat
         if (hit)  // visibility test failed
             continue;
 
+        visibility += 1;
+
         auto r2 = glm::length2(rayTarget - rayOrigin);
         auto cosines = glm::dot(rayDirection, patchA.face->normal) * glm::dot(-rayDirection, patchB.face->normal);
         auto deltaF = cosines * patchB.area / (PI * r2);  // + patchB.area / rayCount);
@@ -94,7 +101,7 @@ float RadiositySolver::calculateFormFactor(const Patch& patchA, const Patch& pat
             F += deltaF;
     }
 
-    return F / rayCount;
+    return {F / rayCount, visibility / rayCount};
 }
 
 void RadiositySolver::initialize(const Ref<Scene>& scene) {
@@ -154,7 +161,7 @@ void RadiositySolver::solveProgressive(float residueThreshold) {
         if (residue <= residueThreshold)
             break;
 
-        if (i % 1000 == 0)
+        if (i % 100 == 0)
             LOG(std::format("{}: residue={:0.4f}", i, residue));
     }
 }
@@ -201,7 +208,13 @@ float RadiositySolver::shoot(uvec2 sourceIdx, float residueThreshold) {
             if (receiver.face == source.face)
                 continue;
 
-            auto F = calculateFormFactor(source, receiver);
+            // check if the patches are facing each other
+            auto sightLine = glm::normalize(receiver.center - source.center);
+            if (glm::dot(sightLine, source.face->normal) <= 0 || glm::dot(-sightLine, receiver.face->normal) <= 0)
+                continue;
+
+            auto [F, visibility] = calculateFormFactor(source, receiver);
+
             if (F == 0)
                 continue;
 
