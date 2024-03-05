@@ -1,5 +1,5 @@
 vcpkg_installed
-lightmap.hdr
+output.hdr
 
 *.blend?
 *.blend?.meta

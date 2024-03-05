@@ -35,13 +35,15 @@ public:
 
     void initialize(const Ref<Scene>& scene);
 
-    void solve(float residueEpsilon = 0, uint32_t iterations = static_cast<uint32_t>(-1));
+    void solveProgressive(float residueThreshold = 0.2);
+
+    void solveUniform(uint32_t iterations = 4);
 
     const Texture<vec3>& lightmap() const {
         return m_lightmapAccumulated;
     }
 
-    void extrapolateLightmap(uint32_t radius = 2);
+    void addPadding(uint32_t radius = 2);
 
 private:
     Ref<Scene> m_scene;
@@ -49,9 +51,9 @@ private:
     Texture<Patch> m_lightmapPatches;
     Texture<vec3> m_lightmapAccumulated;
 
-    uvec2 m_maxResiduePatch = uvec2(0);
+    uvec2 m_maxResiduePatchIdx = uvec2(0);
 
-    float shoot(float residueEpsilon = 0);
+    float shoot(uvec2 source, float residueThreshold = 0);
 
     float calculateFormFactor(const Patch& source, const Patch& destination);
 };

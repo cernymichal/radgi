@@ -144,24 +144,38 @@ void RadiositySolver::initialize(const Ref<Scene>& scene) {
             }
         }
 
-        m_maxResiduePatch = maxResiduePatch;
+        m_maxResiduePatchIdx = maxResiduePatch;
     }
 }
 
-void RadiositySolver::solve(float residueEpsilon, uint32_t iterations) {
-    for (uint32_t i = 0; i < iterations; i++) {
-        auto residue = shoot(residueEpsilon);
-        if (residue <= residueEpsilon)
+void RadiositySolver::solveProgressive(float residueThreshold) {
+    for (uint32_t i = 0;; i++) {
+        auto residue = shoot(m_maxResiduePatchIdx, residueThreshold);
+        if (residue <= residueThreshold)
             break;
+
+        if (i % 1000 == 0)
+            LOG(std::format("{}: residue={:0.4f}", i, residue));
     }
 }
 
-float RadiositySolver::shoot(float residueEpsilon) {
-    // get the patch with the largest residue
-    auto& shootingPatch = m_lightmapPatches[m_maxResiduePatch];
-    auto shotRad = glm::length(shootingPatch.residue);
+void RadiositySolver::solveUniform(uint32_t iterations) {
+    for (uint32_t i = 0; i < iterations; i++) {
+        auto sourceIdx = uvec2(0, 0);
+        for (sourceIdx.y = 0; sourceIdx.y < m_lightmapSize.y; sourceIdx.y++) {
+            for (sourceIdx.x = 0; sourceIdx.x < m_lightmapSize.x; sourceIdx.x++) {
+                shoot(sourceIdx, 0);
+            }
+        }
+        LOG(std::format("Iteration {}/{}", i + 1, iterations));
+    }
+}
 
-    if (shotRad <= residueEpsilon)
+float RadiositySolver::shoot(uvec2 sourceIdx, float residueThreshold) {
+    auto& source = m_lightmapPatches[sourceIdx];
+    auto shotRad = glm::length(source.residue);
+
+    if (source.face == nullptr || shotRad <= residueThreshold)
         return 0;  // nothing to solve
 
     auto maxResiduePatch = uvec2(0, 0);
@@ -170,48 +184,49 @@ float RadiositySolver::shoot(float residueEpsilon) {
     float reflectedRad = 0;
 
     // shoot to other patches
-    for (uint32_t y = 0; y < m_lightmapSize.y; y++) {
-        for (uint32_t x = 0; x < m_lightmapSize.x; x++) {
-            auto& receivingPatch = m_lightmapPatches[uvec2(x, y)];
-            if (receivingPatch.face == nullptr || receivingPatch == shootingPatch)
+    auto receiverIdx = uvec2(0, 0);
+    for (receiverIdx.y = 0; receiverIdx.y < m_lightmapSize.y; receiverIdx.y++) {
+        for (receiverIdx.x = 0; receiverIdx.x < m_lightmapSize.x; receiverIdx.x++) {
+            auto& receiver = m_lightmapPatches[receiverIdx];
+            if (receiver.face == nullptr || receiver == source)
                 continue;
 
             // check for max residue canditate before possible skipping
-            auto residueMagnitude2 = glm::length2(receivingPatch.residue);
+            auto residueMagnitude2 = glm::length2(receiver.residue);
             if (residueMagnitude2 > maxResidue2) {
                 maxResidue2 = residueMagnitude2;
-                maxResiduePatch = uvec2(x, y);
+                maxResiduePatch = receiverIdx;
             }
 
-            if (receivingPatch.face == shootingPatch.face)
+            if (receiver.face == source.face)
                 continue;
 
-            auto F = calculateFormFactor(shootingPatch, receivingPatch);
+            auto F = calculateFormFactor(source, receiver);
             if (F == 0)
                 continue;
 
-            auto deltaRad = receivingPatch.face->material->albedo * shootingPatch.residue * F * shootingPatch.area / receivingPatch.area;
-            receivingPatch.residue += deltaRad;
-            m_lightmapAccumulated[uvec2(x, y)] += deltaRad;
+            auto deltaRad = receiver.face->material->albedo * source.residue * F * source.area / receiver.area;
+            receiver.residue += deltaRad;
+            m_lightmapAccumulated[receiverIdx] += deltaRad;
             reflectedRad += glm::length(deltaRad);
 
             // check for max residue canditate
-            residueMagnitude2 = glm::length2(receivingPatch.residue);
+            residueMagnitude2 = glm::length2(receiver.residue);
             if (residueMagnitude2 > maxResidue2) {
                 maxResidue2 = residueMagnitude2;
-                maxResiduePatch = uvec2(x, y);
+                maxResiduePatch = receiverIdx;
             }
         }
     }
 
-    shootingPatch.residue = vec3(0);
-    m_maxResiduePatch = maxResiduePatch;
+    source.residue = vec3(0);
+    m_maxResiduePatchIdx = maxResiduePatch;
 
-    // LOG(std::format("shotRad={:.04f} reflectedRadPer={:.02f}", shotRad , reflectedRad / shotRad));
+    // LOG(std::format("shotRad={:.04f} reflectedRadPer={:.02f}", shotRad, reflectedRad / shotRad));
     return shotRad;  // return the amount of light shot
 }
 
-void RadiositySolver::extrapolateLightmap(uint32_t radius) {
+void RadiositySolver::addPadding(uint32_t radius) {
     Texture<bool> extrapolatedThisIter(m_lightmapSize);
     for (uint32_t i = 0; i < radius; i++) {
         extrapolatedThisIter.clear(false);
