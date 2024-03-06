@@ -49,6 +49,13 @@ static std::pair<bool, float> rayTriangleIntersection(const vec3& rayOrigin, con
 }
 
 static vec3 randomPointOnPatch(const Patch& patch) {
+    if (patch.vertexCount == 3) {
+        auto u = random<float>();
+        auto v = random<float>(0, 1.0f - u);
+        auto w = 1.0f - u - v;
+        return u * patch.vertices[0] + v * patch.vertices[1] + w * patch.vertices[2];
+    }
+
     auto edge0 = patch.vertices[1] - patch.vertices[0];
     auto edge1 = patch.vertices[3] - patch.vertices[0];
     return patch.vertices[0] + random<float>() * edge0 + random<float>() * edge1;
@@ -110,6 +117,7 @@ void RadiositySolver::initialize(const Ref<Scene>& scene) {
     auto maxResiduePatch = uvec2(0, 0);
     float maxResidue2 = 0;  // squared magnitude
 
+    // rasterize the scene faces into the lightmap
     auto texelSize = 1.0f / vec2(m_lightmapPatches.size());
     for (auto& face : m_scene->faces) {
         vec2 min = glm::min(glm::min(face.lightmapUVs[0], face.lightmapUVs[1]), face.lightmapUVs[2]);
@@ -126,23 +134,87 @@ void RadiositySolver::initialize(const Ref<Scene>& scene) {
                     vec2(x + 1, y + 1) * texelSize,
                     vec2(x, y + 1) * texelSize};
 
-                vec3 patchVertices[4];
-                uint32_t verticesInsideFace = 0;
-                for (uint32_t i = 0; i < 4; i++) {
-                    vec3 barycentric = barycentricCoordinates(face.lightmapUVs, texelVertices[i]);
-                    patchVertices[i] = barycentric.x * face.vertices[0] + barycentric.y * face.vertices[1] + barycentric.z * face.vertices[2];
+                if (m_lightmapPatches[uvec2(x, y)].face != nullptr) {
+                    vec3 patchVerticesWS[4];
+                    uint32_t verticesInsideFace = 0;
+                    for (uint32_t i = 0; i < 4; i++) {
+                        vec3 barycentric = barycentricCoordinates(face.lightmapUVs, texelVertices[i]);
+                        patchVerticesWS[i] = barycentric.x * face.vertices[0] + barycentric.y * face.vertices[1] + barycentric.z * face.vertices[2];
 
-                    if (glm::all(glm::greaterThanEqual(barycentric, vec3(0))))
-                        verticesInsideFace++;
+                        if (glm::all(glm::greaterThanEqual(barycentric, vec3(0))))
+                            verticesInsideFace++;
+                    }
+
+                    if (verticesInsideFace == 0)  // texel is outside the face
+                        continue;
+
+                    m_lightmapPatches[uvec2(x, y)] = Patch(4, patchVerticesWS, &face);
+                }
+                else {
+                    // TODO please check, optimize and refactor this
+
+                    std::vector<vec2> patchVertices;
+
+                    // add texel vertices if they are inside the face
+                    for (uint32_t i = 0; i < 4; i++) {
+                        vec3 barycentric = barycentricCoordinates(face.lightmapUVs, texelVertices[i]);
+                        if (glm::all(glm::greaterThanEqual(barycentric, vec3(0))))
+                            patchVertices.push_back(texelVertices[i]);
+                    }
+
+                    // add edge intersections
+                    for (uint32_t i = 0; i < 4; i++) {
+                        auto texelVertex = texelVertices[i];
+                        auto texelEdge = texelVertices[(i + 1) % 4] - texelVertex;
+
+                        for (uint32_t j = 0; j < 3; j++) {
+                            auto faceVertex = face.lightmapUVs[j];
+                            auto faceEdge = face.lightmapUVs[(j + 1) % 3] - faceVertex;
+
+                            float t = (texelEdge.y * (faceVertex.x - faceVertex.x) - texelEdge.x * (faceVertex.y - faceVertex.y)) / (faceEdge.x * texelEdge.y - faceEdge.y * texelEdge.x);
+                            float u = -(faceEdge.x * (texelVertex.y - faceVertex.y) - faceEdge.y * (texelVertex.x - faceVertex.x)) / (faceEdge.x * texelEdge.y - faceEdge.y * texelEdge.x);
+                            if (t > 0 && t < 1 && u >= 0 && u <= 1) {
+                                auto intersection = faceVertex + t * faceEdge;
+                                patchVertices.push_back(intersection);
+
+                                // if (glm::any(glm::lessThan(intersection, texelVertices[0] - 0.0001f)) || glm::any(glm::greaterThan(intersection, texelVertices[2] + 0.0001f)))
+                                //     assert(false);
+                            }
+                        }
+                    }
+
+                    // add face vertices inside the texel
+                    for (uint32_t i = 0; i < 3; i++) {
+                        if (face.lightmapUVs[i].x > texelVertices[0].x && face.lightmapUVs[i].x < texelVertices[1].x && face.lightmapUVs[i].y > texelVertices[0].y && face.lightmapUVs[i].y < texelVertices[2].y)
+                            patchVertices.push_back(face.lightmapUVs[i]);
+                    }
+
+                    if (patchVertices.size() < 3)
+                        continue;
+
+                    if (patchVertices.size() > 4) {
+                        patchVertices.clear();
+                        for (uint32_t i = 0; i < 4; i++)
+                            patchVertices.push_back(texelVertices[i]);
+                    }
+                    else {
+                        auto center = std::accumulate(patchVertices.begin(), patchVertices.end(), vec2(0)) / static_cast<float>(patchVertices.size());
+                        std::sort(patchVertices.begin(), patchVertices.end(), [center](const vec2& a, const vec2& b) { return atan2(a.x - center.x, a.y - center.y) < atan2(b.x - center.x, b.y - center.y); });
+                    }
+
+                    vec3 patchVerticesWS[4];
+                    for (uint32_t i = 0; i < patchVertices.size(); i++) {
+                        vec3 barycentric = barycentricCoordinates(face.lightmapUVs, patchVertices[i]);
+                        patchVerticesWS[i] = barycentric.x * face.vertices[0] + barycentric.y * face.vertices[1] + barycentric.z * face.vertices[2];
+                    }
+
+                    m_lightmapPatches[uvec2(x, y)] = Patch(patchVertices.size(), patchVerticesWS, &face);
                 }
 
-                if (verticesInsideFace == 0)  // texel is outside the face
-                    continue;
-
-                m_lightmapPatches[uvec2(x, y)] = Patch(patchVertices, &face);
                 auto residue = m_lightmapPatches[uvec2(x, y)].residue;
                 m_lightmapAccumulated[uvec2(x, y)] = residue;
 
+                // TODO this isnt update properly after because of overwriting in the lightmap
                 auto residueMagnitude2 = glm::length2(residue);
                 if (residueMagnitude2 > maxResidue2) {
                     maxResidue2 = residueMagnitude2;

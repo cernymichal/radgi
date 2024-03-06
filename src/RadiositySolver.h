@@ -6,6 +6,7 @@
 
 struct Patch {
     vec3 vertices[4];
+    uint8_t vertexCount = 0;
     vec3 center = vec3(0);
     float area = 0;
     vec3 residue = vec3(0);
@@ -13,10 +14,19 @@ struct Patch {
 
     Patch() = default;
 
-    Patch(vec3 vertices[4], Face* face) : face(face) {
-        memcpy(this->vertices, vertices, sizeof(this->vertices));
-        center = (vertices[0] + vertices[1] + vertices[2] + vertices[3]) / 4.0f;
-        area = glm::length(glm::cross(vertices[1] - vertices[0], vertices[3] - vertices[0]));
+    Patch(uint8_t vertexCount, vec3 vertices[], Face* face) : vertexCount(vertexCount), face(face) {
+        memcpy(this->vertices, vertices, vertexCount * sizeof(vec3));
+
+        center = vec3(0);
+        for (uint8_t i = 0; i < vertexCount; i++)
+            center += vertices[i];
+        center /= vertexCount;
+
+        // TODO - this is not correct for general quads
+        area = glm::length(glm::cross(vertices[1] - vertices[0], vertices[2] - vertices[1]));
+        if (vertexCount == 3)
+            area /= 2;
+
         residue = face->material->emission;  //* area;
     }
 
