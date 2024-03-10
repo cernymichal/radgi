@@ -9,7 +9,7 @@ auto constexpr USAGE =
 Options:
     <input_file>                    Input scene in .obj format
 
-	-o, --output <output_file>      Output file for the lightmap (output.hdr by default)
+	-o, --output <output_file>      Output file for the lightmap (output.exr by default)
 
 	-r, --resolution <resolution>   Lightmap resolution (128 by default)
 
@@ -22,11 +22,13 @@ Options:
 
 	-p, --padding <radius>          Extrapolate lightmap regions with the given radius in pixels (2 by default)
 
+    -g, --gpu                       Use GPU acceleration (not implemented yet)
+
     -h, --help                      Print this help message
 
 
 Example:
-	radgi resources/cornell_box/cornell_box.obj -o lightmap.hdr -r 256 -t 0.01)";
+	radgi resources/cornell_box/cornell_box.obj -o lightmap.exr -r 256 -t 0.01)";
 
 int main(int argc, char* argv[]) {
     argh::parser cmdl(argc, argv, argh::parser::PREFER_PARAM_FOR_UNREG_OPTION);
@@ -38,7 +40,7 @@ int main(int argc, char* argv[]) {
     auto inputFile = cmdl[1];
 
     std::string outputFile;
-    cmdl({"-o", "--output"}, "output.hdr") >> outputFile;
+    cmdl({"-o", "--output"}, "output.exr") >> outputFile;
 
     uint32_t resolution;
     cmdl({"-r", "--resolution"}, 128) >> resolution;
@@ -54,12 +56,19 @@ int main(int argc, char* argv[]) {
     uint32_t paddingRadius;
     cmdl({"-p", "--padding"}, 2) >> paddingRadius;
 
+    bool useGPU = cmdl[{"-g", "--gpu"}];
+
     auto lightmapSize = uvec2(resolution);
     auto scene = makeRef<Scene>();
     scene->faces = loadMesh(inputFile);
 
     RadiositySolver solver(lightmapSize);
     solver.initialize(scene);
+
+#define OUTPUT_PATCH_GEOMETRY
+#ifdef OUTPUT_PATCH_GEOMETRY
+    saveMesh("patches.obj", solver.createPatchGeometry());
+#endif
 
     LOG("Solving");
 
@@ -75,7 +84,7 @@ int main(int argc, char* argv[]) {
     LOG("Adding padding to the lightmap");
     solver.addPadding(paddingRadius);
 
-    solver.lightmap().save(outputFile);
+    solver.lightmap().save(outputFile, true);
 
     return EXIT_SUCCESS;
 }

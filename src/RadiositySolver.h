@@ -55,6 +55,8 @@ public:
 
     void addPadding(uint32_t radius = 2);
 
+    std::vector<Face> createPatchGeometry() const;
+
 private:
     Ref<Scene> m_scene;
     uvec2 m_lightmapSize;

@@ -1,5 +1,6 @@
 vcpkg_installed
-output.hdr
+output.exr
+patches.obj
 
 *.blend?
 *.blend?.meta

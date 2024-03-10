@@ -6,9 +6,10 @@ struct Material {
 };
 
 struct Face {
-    vec3 vertices[3];  // world space
+    vec3 vertices[4];
+    uint8_t vertexCount;
     vec3 normal;
-    vec2 lightmapUVs[3];
+    vec2 lightmapUVs[4];
     Ref<Material> material;
 
     bool operator==(const Face& other) const {
@@ -16,4 +17,6 @@ struct Face {
     }
 };
 
-std::vector<Face> loadMesh(const std::string& filePath);
+std::vector<Face> loadMesh(const std::filesystem::path& filePath);
+
+void saveMesh(const std::filesystem::path& filePath, const std::vector<Face>& faces);

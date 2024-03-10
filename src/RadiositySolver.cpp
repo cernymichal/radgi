@@ -1,7 +1,5 @@
 #include "RadiositySolver.h"
 
-#include <fstream>
-
 static float triangleArea(const vec2& a, const vec2& b, const vec2& c) {
     vec2 edge0 = b - a;
     vec2 edge1 = c - a;
@@ -126,6 +124,8 @@ void RadiositySolver::initialize(const Ref<Scene>& scene) {
     // rasterize the scene faces into the lightmap
     auto texelSize = 1.0f / vec2(m_lightmapPatches.size());
     for (auto& face : m_scene->faces) {
+        assert(face.vertexCount == 3);
+
         vec2 min = glm::min(glm::min(face.lightmapUVs[0], face.lightmapUVs[1]), face.lightmapUVs[2]);
         vec2 max = glm::max(glm::max(face.lightmapUVs[0], face.lightmapUVs[1]), face.lightmapUVs[2]);
 
@@ -189,8 +189,8 @@ void RadiositySolver::initialize(const Ref<Scene>& scene) {
                                 auto intersection = texelVertex + t * texelEdge;
                                 patchVertices.push_back(intersection);
 
-                                //if (glm::any(glm::lessThan(intersection, texelVertices[0] - 0.0001f)) || glm::any(glm::greaterThan(intersection, texelVertices[2] + 0.0001f)))
-                                //   assert(false);
+                                // if (glm::any(glm::lessThan(intersection, texelVertices[0] - 0.0001f)) || glm::any(glm::greaterThan(intersection, texelVertices[2] + 0.0001f)))
+                                //    assert(false);
                             }
                         }
                     }
@@ -237,32 +237,6 @@ void RadiositySolver::initialize(const Ref<Scene>& scene) {
     }
 
     m_maxResiduePatchIdx = maxResiduePatch;
-
-    std::stringstream ss;
-    auto patchIdx = uvec2(0, 0);
-    auto vertexI = 1;
-    for (patchIdx.y = 0; patchIdx.y < m_lightmapSize.y; patchIdx.y++) {
-        for (patchIdx.x = 0; patchIdx.x < m_lightmapSize.x; patchIdx.x++) {
-            auto& patch = m_lightmapPatches[patchIdx];
-
-            if (patch.face == nullptr)
-                continue;
-
-            for (uint32_t i = 0; i < patch.vertexCount; i++) {
-                auto vertex = patch.vertices[i];
-                ss << std::format("v {} {} {}\n", vertex.x, vertex.y, vertex.z);
-                vertexI++;
-            }
-            if (patch.vertexCount == 3)
-                ss << std::format("f {} {} {}\n", vertexI - 3, vertexI - 2, vertexI - 1);
-            else
-                ss << std::format("f {} {} {} {}\n", vertexI - 4, vertexI - 3, vertexI - 2, vertexI - 1);
-        }
-    }
-
-    auto file = std::ofstream("reconstruction.obj");
-    file << ss.str();
-    file.close();
 }
 
 void RadiositySolver::solveProgressive(float residueThreshold) {
@@ -383,4 +357,21 @@ void RadiositySolver::addPadding(uint32_t radius) {
             }
         }
     }
+}
+
+std::vector<Face> RadiositySolver::createPatchGeometry() const {
+    std::vector<Face> geometry;
+    for (uint32_t y = 0; y < m_lightmapSize.y; y++) {
+        for (uint32_t x = 0; x < m_lightmapSize.x; x++) {
+            auto& patch = m_lightmapPatches[uvec2(x, y)];
+            if (patch.face == nullptr)
+                continue;
+
+            auto& face = geometry.emplace_back();
+            face.vertexCount = patch.vertexCount;
+            for (uint32_t i = 0; i < patch.vertexCount; i++)
+                face.vertices[i] = patch.vertices[i];
+        }
+    }
+    return geometry;
 }
