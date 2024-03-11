@@ -5,7 +5,7 @@
 #include "Texture.h"
 
 struct Patch {
-    vec3 vertices[4];
+    std::array<vec3, 4> vertices;
     uint8_t vertexCount = 0;
     vec3 center = vec3(0);
     float area = 0;
@@ -14,9 +14,7 @@ struct Patch {
 
     Patch() = default;
 
-    Patch(uint8_t vertexCount, vec3 vertices[], Face* face) : vertexCount(vertexCount), face(face) {
-        memcpy(this->vertices, vertices, vertexCount * sizeof(vec3));
-
+    Patch(uint8_t vertexCount, const std::array<vec3, 4>& vertices, Face* face) : vertices(vertices), vertexCount(vertexCount), face(face) {
         center = vec3(0);
         for (uint8_t i = 0; i < vertexCount; i++)
             center += vertices[i];

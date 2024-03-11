@@ -1,6 +1,7 @@
 #pragma once
 
 #define GLM_ENABLE_EXPERIMENTAL
+#define GLM_FORCE_CUDA
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -29,6 +30,15 @@ using glm::vec2;
 using glm::vec3;
 using glm::vec4;
 
+namespace glm {
+
+template <typename T, glm::qualifier Q>
+constexpr inline T cross(const glm::vec<2, T, Q>& a, const glm::vec<2, T, Q>& b) {
+    return a.x * b.y - a.y * b.x;
+}
+
+}  // namespace glm
+
 /*
  * @param v The incoming vector
  * @param normal The normal vector
@@ -51,6 +61,64 @@ inline vec3 refract(const vec3& v, const vec3& normal, float refractionRatio) {
 };
 
 /*
+ * @param aOrigin The origin of the first line
+ * @param aDirection The direction of the first line
+ * @param bOrigin The origin of the second line
+ * @param bDirection The direction of the second line
+ * @return The parameters t and u from the line origins along the line directions to the intersection point
+ *
+ * @note If the lines are parallel, the result is undefined
+ */
+constexpr inline vec2 lineIntersection(const vec2& aOrigin, const vec2& aDirection, const vec2& bOrigin, const vec2& bDirection) {
+    // X = aOrigin + aDirection * t
+    // X = bOrigin + bDirection * u
+
+    float t = glm::cross(bOrigin - aOrigin, bDirection / glm::cross(aDirection, bDirection));
+    float u = glm::cross(aOrigin - bOrigin, aDirection / glm::cross(bDirection, aDirection));
+    return vec2(t, u);
+}
+
+/*
+ * @param rayOrigin The origin of the ray
+ * @param rayDirection The direction of the ray
+ * @param vertices The vertices of the triangle
+ * @return The t from the ray origin along the rayDirection the intersection point, or NAN if there is no intersection
+ *
+ * @note back facing triangles are not intersected
+ */
+constexpr inline float rayTriangleIntersection(const vec3& rayOrigin, const vec3& rayDirection, const std::array<vec3, 3>& vertices) {
+    // X = rayOrigin + rayDirection * t
+
+    // Möller–Trumbore intersection algorithm
+    auto edge1 = vertices[1] - vertices[0];
+    auto edge2 = vertices[2] - vertices[0];
+    auto P = glm::cross(rayDirection, edge2);
+    auto determinant = glm::dot(edge1, P);
+
+    // if the determinant is negative, the triangle is back facing
+    // if the determinant is close to 0, the ray misses the triangle
+    if (determinant < 0.0001f)
+        return NAN;
+
+    auto determinantInv = 1.0f / determinant;
+    auto T = rayOrigin - vertices[0];
+    auto u = glm::dot(T, P) * determinantInv;
+    if (u < 0 || u > 1)
+        return NAN;
+
+    auto Q = glm::cross(T, edge1);
+    auto v = glm::dot(rayDirection, Q) * determinantInv;
+    if (v < 0 || u + v > 1)
+        return NAN;
+
+    auto t = glm::dot(edge2, Q) * determinantInv;
+    if (t < 0)
+        return NAN;
+
+    return t;
+}
+
+/*
  * @param cosine The cosine of the angle between the incident ray and the normal
  * @param refractionRatio The ratio of the incoming to outgoing refractive indices
  */
@@ -60,6 +128,40 @@ inline float reflectance(float cosine, float refractionRatio) {
     r0 *= r0;
     return r0 + (1 - r0) * static_cast<float>(std::pow((1 - cosine), 5));
 }
+
+// Comparison operators for vectors
+
+template <int L, typename T, glm::qualifier Q>
+constexpr inline glm::vec<L, bool> operator==(const glm::vec<L, T, Q>& a, const glm::vec<L, T, Q>& b) {
+    return glm::equal(a, b);
+}
+
+template <int L, typename T, glm::qualifier Q>
+constexpr inline glm::vec<L, bool> operator!=(const glm::vec<L, T, Q>& a, const glm::vec<L, T, Q>& b) {
+    return glm::notEqual(a, b);
+}
+
+template <int L, typename T, glm::qualifier Q>
+constexpr inline glm::vec<L, bool> operator>(const glm::vec<L, T, Q>& a, const glm::vec<L, T, Q>& b) {
+    return glm::greaterThan(a, b);
+}
+
+template <int L, typename T, glm::qualifier Q>
+constexpr inline glm::vec<L, bool> operator>=(const glm::vec<L, T, Q>& a, const glm::vec<L, T, Q>& b) {
+    return glm::greaterThanEqual(a, b);
+}
+
+template <int L, typename T, glm::qualifier Q>
+constexpr inline glm::vec<L, bool> operator<(const glm::vec<L, T, Q>& a, const glm::vec<L, T, Q>& b) {
+    return glm::lessThan(a, b);
+}
+
+template <int L, typename T, glm::qualifier Q>
+constexpr inline glm::vec<L, bool> operator<=(const glm::vec<L, T, Q>& a, const glm::vec<L, T, Q>& b) {
+    return glm::lessThanEqual(a, b);
+}
+
+// Stream operators for vectors
 
 template <typename T>
 inline std::ostream& operator<<(std::ostream& os, const glm::vec<2, T>& v) {

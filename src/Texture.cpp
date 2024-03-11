@@ -63,9 +63,9 @@ Texture<T>::Texture(const std::filesystem::path& filePath, bool flipVertically) 
             header.requested_pixel_types[i] = TINYEXR_PIXELTYPE_FLOAT;
     }
 
-    EXRImage iamge;
-    InitEXRImage(&iamge);
-    status = LoadEXRImageFromFile(&iamge, &header, pathString.c_str(), &error);
+    EXRImage image;
+    InitEXRImage(&image);
+    status = LoadEXRImageFromFile(&image, &header, pathString.c_str(), &error);
     if (status != 0) {
         LOG("Couldn't load EXR file");
         LOG(error);
@@ -74,7 +74,7 @@ Texture<T>::Texture(const std::filesystem::path& filePath, bool flipVertically) 
         throw std::runtime_error("Couldn't load EXR file");
     }
 
-    m_size = ivec2(iamge.width, iamge.height);
+    m_size = ivec2(image.width, image.height);
     m_data = new T[m_size.x * m_size.y];
 
     // Load the image data to a single array, flipping it vertically if necessary
@@ -85,7 +85,7 @@ Texture<T>::Texture(const std::filesystem::path& filePath, bool flipVertically) 
             for (idx.x = 0; idx.x < m_size.x; idx.x++) {
                 auto i = idx.y * m_size.x + idx.x;
                 auto flippedI = (flipVertically ? m_size.y - 1 - idx.y : idx.y) * m_size.x + idx.x;
-                dataFloat[flippedI * channelsToLoad + channel] = reinterpret_cast<float*>(iamge.images[channel])[i];
+                dataFloat[flippedI * channelsToLoad + channel] = reinterpret_cast<float*>(image.images[channel])[i];
             }
         }
     }
@@ -101,7 +101,7 @@ Texture<T>::Texture(const std::filesystem::path& filePath, bool flipVertically) 
         }
     }
 
-    FreeEXRImage(&iamge);
+    FreeEXRImage(&image);
     FreeEXRHeader(&header);
 }
 

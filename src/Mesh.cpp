@@ -87,7 +87,7 @@ void saveMesh(const std::filesystem::path& filePath, const std::vector<Face>& fa
         }
         if (face.vertexCount == 3)
             file << std::format("f {} {} {}\n", vertexI - 3, vertexI - 2, vertexI - 1);
-        else
+        else if (face.vertexCount == 4)
             file << std::format("f {} {} {} {}\n", vertexI - 4, vertexI - 3, vertexI - 2, vertexI - 1);
     }
 

@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <random>
+#include <thread>
 
 #include "Math.h"
 
@@ -71,9 +72,9 @@ struct Xoshiro256SS {
     }
 
     /*
-     * @brief Constructs a new instance seeded by the current time.
+     * @brief Constructs a new instance seeded by the current time and thread ID.
      */
-    explicit Xoshiro256SS() : Xoshiro256SS(std::chrono::system_clock::now().time_since_epoch().count()) {}
+    explicit Xoshiro256SS() : Xoshiro256SS(std::chrono::system_clock::now().time_since_epoch().count() + std::hash<std::thread::id>()(std::this_thread::get_id())) {}
 
     /*
      * @brief Generates a random uint64 and updates the state.
@@ -206,35 +207,36 @@ inline glm::vec<L, T> randomVec() {
  *
  * @note Uses RANDOM_GENERATOR internally.
  */
-inline vec3 randomUnitVec3() {
-    // faster than sampling a gaussian distribution and normalizing - tested with box-muller transform
+template <int L, typename T = float>
+inline glm::vec<L, T> randomUnitVec() {
+    // for vec3 - faster than sampling a gaussian distribution and normalizing - tested with box-muller transform
 
     while (true) {
-        vec3 v = randomVec<3>(vec3(-1), vec3(1));
+        glm::vec<L, T> v = randomVec<L>(glm::vec<L, T>(-1), glm::vec<L, T>(1));
         if (glm::length2(v) <= 1.0)
             return glm::normalize(v);
     }
 }
 
 /*
- * @return A random unit vec3 on a hemisphere given by a normal.
+ * @return A random unit vec3 on a unit hemisphere given by a normal.
  *
  * @note Uses RANDOM_GENERATOR internally.
  */
-inline vec3 randomVecOnHemisphere(const vec3& normal) {
-    auto v = randomUnitVec3();
+inline vec3 randomVec3OnHemisphere(const vec3& normal) {
+    auto v = randomUnitVec<3>();
     return glm::dot(v, normal) >= 0.0f ? v : -v;
 }
 
 /*
- * @return A random unit vec3 in a disk in the xy plane.
+ * @return A random vec2 in a unit disk around 0.
  *
  * @note Uses RANDOM_GENERATOR internally.
  */
-inline vec3 randomInUnitDisk() {
+inline vec2 randomVec2InUnitDisk() {
     while (true) {
-        auto p = randomVec<2>(vec2(-1), vec2(1));
-        if (glm::length2(p) <= 1.0)
-            return vec3(p, 0);
+        auto v = randomVec<2>(vec2(-1), vec2(1));
+        if (glm::length2(v) <= 1.0)
+            return v;
     }
 }

@@ -3,49 +3,16 @@
 static float triangleArea(const vec2& a, const vec2& b, const vec2& c) {
     vec2 edge0 = b - a;
     vec2 edge1 = c - a;
-    return (edge0.x * edge1.y - edge1.x * edge0.y) / 2;
+    return glm::cross(edge0, edge1) / 2;
 }
 
-static vec3 barycentricCoordinates(const vec2 vertices[3], const vec2& point) {
+static vec3 barycentricCoordinates(const std::array<vec2, 3>& vertices, const vec2& point) {
     auto area = triangleArea(vertices[0], vertices[1], vertices[2]);
     vec3 barycentric;
     barycentric.x = triangleArea(vertices[1], vertices[2], point);
     barycentric.y = triangleArea(vertices[2], vertices[0], point);
     barycentric.z = triangleArea(vertices[0], vertices[1], point);
     return barycentric / area;
-}
-
-static std::pair<bool, float> rayTriangleIntersection(const vec3& rayOrigin, const vec3& rayDirection, const vec3 vertices[3]) {
-    constexpr auto epsilon = 0.001f;
-
-    // Möller–Trumbore intersection algorithm
-
-    auto edge1 = vertices[1] - vertices[0];
-    auto edge2 = vertices[2] - vertices[0];
-    auto P = glm::cross(rayDirection, edge2);
-    auto determinant = glm::dot(edge1, P);
-
-    // if the determinant is negative, the triangle is back facing
-    // if the determinant is close to 0, the ray misses the triangle
-    if (determinant < epsilon)
-        return {false, 0};
-
-    auto determinantInv = 1.0f / determinant;
-    auto T = rayOrigin - vertices[0];
-    auto u = glm::dot(T, P) * determinantInv;
-    if (u < 0 || u > 1)
-        return {false, 0};
-
-    auto Q = glm::cross(T, edge1);
-    auto v = glm::dot(rayDirection, Q) * determinantInv;
-    if (v < 0 || u + v > 1)
-        return {false, 0};
-
-    auto t = glm::dot(edge2, Q) * determinantInv;
-    if (t < 0)
-        return {false, 0};
-
-    return {true, t};
 }
 
 static vec3 randomPointOnPatch(const Patch& patch) {
@@ -85,8 +52,8 @@ std::pair<float, float> RadiositySolver::calculateFormFactor(const Patch& patchA
             if (face == *patchA.face || face == *patchB.face)
                 continue;
 
-            auto [intersects, t] = rayTriangleIntersection(rayOrigin, rayDirection, face.vertices);
-            if (!intersects)
+            auto t = rayTriangleIntersection(rayOrigin, rayDirection, narrowToTriangle(face.vertices));
+            if (std::isnan(t))
                 continue;
 
             if (t < targetDistance - 0.01f) {  // leeway for shared edges passing through the lightmap
@@ -111,8 +78,75 @@ std::pair<float, float> RadiositySolver::calculateFormFactor(const Patch& patchA
     return {F / rayCount, visibility / rayCount};
 }
 
-float cross2d(const vec2& a, const vec2& b) {
-    return a.x * b.y - a.y * b.x;
+std::tuple<std::array<vec2, 4>, uint8_t> faceTexelIntersection(const Face& face, const std::array<vec2, 4>& texelVertices) {
+    std::array<vec2, 4> intersectionVertices;
+    uint8_t intersectionVertexCount = 0;
+
+    // add texel vertices if they are inside the face
+    for (uint32_t i = 0; i < 4; i++) {
+        vec3 barycentric = barycentricCoordinates(narrowToTriangle(face.lightmapUVs), texelVertices[i]);
+        if (glm::all(barycentric >= vec3(0)))
+            intersectionVertices[intersectionVertexCount++] = texelVertices[i];
+    }
+
+    if (intersectionVertexCount == 4)  // all texel vertices are inside the face
+        return {texelVertices, 4};
+
+    // add edge intersections
+    for (uint32_t i = 0; i < 4; i++) {
+        auto texelVertex = texelVertices[i];
+        auto texelEdge = texelVertices[(i + 1) % 4] - texelVertex;
+
+        for (uint32_t j = 0; j < 3; j++) {
+            auto faceVertex = face.lightmapUVs[j];
+            auto faceEdge = face.lightmapUVs[(j + 1) % 3] - faceVertex;
+
+            vec2 params = lineIntersection(texelVertex, texelEdge, faceVertex, faceEdge);
+            if (params.x > 0 && params.x < 1 && params.y >= 0 && params.y <= 1) {
+                // polygons with more than 4 vertices would be too complex to handle
+                if (intersectionVertexCount == 4)
+                    return {texelVertices, 4};
+
+                auto intersection = texelVertex + params.x * texelEdge;
+                intersectionVertices[intersectionVertexCount++] = intersection;
+            }
+        }
+    }
+
+    // add face vertices inside the texel
+    for (uint32_t i = 0; i < 3; i++) {
+        if (glm::all(face.lightmapUVs[i] > texelVertices[0]) && glm::all(face.lightmapUVs[i] < texelVertices[2])) {
+            // polygons with more than 4 vertices would be too complex to handle
+            if (intersectionVertexCount == 4)
+                return {texelVertices, 4};
+
+            intersectionVertices[intersectionVertexCount++] = face.lightmapUVs[i];
+        }
+    }
+
+    if (intersectionVertexCount < 3)
+        return {{}, 0};
+
+    // sort the vertices to CCW order
+    auto center = vec2(0);
+    for (uint32_t i = 0; i < intersectionVertexCount; i++)
+        center += intersectionVertices[i];
+    center /= static_cast<float>(intersectionVertexCount);
+    for (uint32_t i = 0; i < intersectionVertexCount; i++) {  // bubble for 4 vertices here is ~2.5x faster than std::sort
+        bool swapped = false;
+        for (uint32_t j = 0; j < intersectionVertexCount - i - 1; j++) {
+            auto& a = intersectionVertices[j];
+            auto& b = intersectionVertices[j + 1];
+            if (atan2(a.x - center.x, a.y - center.y) > atan2(b.x - center.x, b.y - center.y)) {
+                std::swap(a, b);
+                swapped = true;
+            }
+        }
+        if (!swapped)
+            break;
+    }
+
+    return {intersectionVertices, intersectionVertexCount};
 }
 
 void RadiositySolver::initialize(const Ref<Scene>& scene) {
@@ -134,99 +168,37 @@ void RadiositySolver::initialize(const Ref<Scene>& scene) {
 
         for (uint32_t y = minTexel.y; y <= maxTexel.y; y++) {
             for (uint32_t x = minTexel.x; x <= maxTexel.x; x++) {
-                vec2 texelVertices[4] = {
+                std::array<vec2, 4> texelVertices = {
                     vec2(x, y) * texelSize,
                     vec2(x + 1, y) * texelSize,
                     vec2(x + 1, y + 1) * texelSize,
                     vec2(x, y + 1) * texelSize};
 
+                auto [patchVertices, patchVertexCount] = faceTexelIntersection(face, texelVertices);
+
+                if (patchVertexCount < 3)
+                    continue;
+
                 if (m_lightmapPatches[uvec2(x, y)].face != nullptr) {
-                    vec3 patchVerticesWS[4];
-                    uint32_t verticesInsideFace = 0;
-                    for (uint32_t i = 0; i < 4; i++) {
-                        vec3 barycentric = barycentricCoordinates(face.lightmapUVs, texelVertices[i]);
-                        patchVerticesWS[i] = barycentric.x * face.vertices[0] + barycentric.y * face.vertices[1] + barycentric.z * face.vertices[2];
+                    // TODO merge the patches somehow
 
-                        if (glm::all(glm::greaterThanEqual(barycentric, vec3(0))))
-                            verticesInsideFace++;
-                    }
-
-                    if (verticesInsideFace == 0)  // texel is outside the face TODO this is not correct
-                        continue;
-
-                    m_lightmapPatches[uvec2(x, y)] = Patch(4, patchVerticesWS, &face);
+                    patchVertices = texelVertices;
+                    patchVertexCount = 4;
                 }
-                else {
-                    // TODO please check, optimize and refactor this
 
-                    std::vector<vec2> patchVertices;
-
-                    // add texel vertices if they are inside the face
-                    int32_t verticesInsideFace = 0;
-                    for (uint32_t i = 0; i < 4; i++) {
-                        vec3 barycentric = barycentricCoordinates(face.lightmapUVs, texelVertices[i]);
-                        if (glm::all(glm::greaterThanEqual(barycentric, vec3(0))))
-                            patchVertices.push_back(texelVertices[i]);
-
-                        if (glm::all(glm::greaterThanEqual(barycentric, vec3(0))))
-                            verticesInsideFace++;
-                    }
-                    // if (verticesInsideFace == 4)
-                    //   continue;
-
-                    // add edge intersections
-                    for (uint32_t i = 0; i < 4; i++) {
-                        auto texelVertex = texelVertices[i];
-                        auto texelEdge = texelVertices[(i + 1) % 4] - texelVertex;
-
-                        for (uint32_t j = 0; j < 3; j++) {
-                            auto faceVertex = face.lightmapUVs[j];
-                            auto faceEdge = face.lightmapUVs[(j + 1) % 3] - faceVertex;
-
-                            float t = cross2d(faceVertex - texelVertex, faceEdge / cross2d(texelEdge, faceEdge));
-                            float u = cross2d(texelVertex - faceVertex, texelEdge / cross2d(faceEdge, texelEdge));
-                            if (t > 0 && t < 1 && u >= 0 && u <= 1) {
-                                auto intersection = texelVertex + t * texelEdge;
-                                patchVertices.push_back(intersection);
-
-                                // if (glm::any(glm::lessThan(intersection, texelVertices[0] - 0.0001f)) || glm::any(glm::greaterThan(intersection, texelVertices[2] + 0.0001f)))
-                                //    assert(false);
-                            }
-                        }
-                    }
-
-                    // add face vertices inside the texel
-                    for (uint32_t i = 0; i < 3; i++) {
-                        if (face.lightmapUVs[i].x > texelVertices[0].x && face.lightmapUVs[i].x < texelVertices[1].x && face.lightmapUVs[i].y > texelVertices[0].y && face.lightmapUVs[i].y < texelVertices[2].y)
-                            patchVertices.push_back(face.lightmapUVs[i]);
-                    }
-
-                    if (patchVertices.size() < 3)
-                        continue;
-
-                    if (patchVertices.size() > 4) {
-                        patchVertices.clear();
-                        for (uint32_t i = 0; i < 4; i++)
-                            patchVertices.push_back(texelVertices[i]);
-                    }
-                    else {
-                        auto center = std::accumulate(patchVertices.begin(), patchVertices.end(), vec2(0)) / static_cast<float>(patchVertices.size());
-                        std::sort(patchVertices.begin(), patchVertices.end(), [center](const vec2& a, const vec2& b) { return atan2(a.x - center.x, a.y - center.y) < atan2(b.x - center.x, b.y - center.y); });
-                    }
-
-                    vec3 patchVerticesWS[4];
-                    for (uint32_t i = 0; i < patchVertices.size(); i++) {
-                        vec3 barycentric = barycentricCoordinates(face.lightmapUVs, patchVertices[i]);
-                        patchVerticesWS[i] = barycentric.x * face.vertices[0] + barycentric.y * face.vertices[1] + barycentric.z * face.vertices[2];
-                    }
-
-                    m_lightmapPatches[uvec2(x, y)] = Patch(patchVertices.size(), patchVerticesWS, &face);
+                // translate the texel vertices to world space
+                std::array<vec3, 4> patchVerticesWS;
+                for (uint32_t i = 0; i < patchVertexCount; i++) {
+                    vec3 barycentric = barycentricCoordinates(narrowToTriangle(face.lightmapUVs), patchVertices[i]);
+                    patchVerticesWS[i] = barycentric.x * face.vertices[0] + barycentric.y * face.vertices[1] + barycentric.z * face.vertices[2];
                 }
+
+                m_lightmapPatches[uvec2(x, y)] = Patch(patchVertexCount, patchVerticesWS, &face);
 
                 auto residue = m_lightmapPatches[uvec2(x, y)].residue;
                 m_lightmapAccumulated[uvec2(x, y)] = residue;
 
-                // TODO this isnt update properly after because of overwriting in the lightmap
+                // TODO this isnt updated properly after because of overwriting in the lightmap
                 auto residueMagnitude2 = glm::length2(residue);
                 if (residueMagnitude2 > maxResidue2) {
                     maxResidue2 = residueMagnitude2;

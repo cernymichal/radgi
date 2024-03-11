@@ -13,7 +13,7 @@ Options:
 
 	-r, --resolution <resolution>   Lightmap resolution (128 by default)
 
-	-t, --threshold <threshold>     Residue threshold for terminating (0.2 by default)
+	-t, --threshold <threshold>     Residue threshold for terminating (0.1 by default)
                                     This is the default mode - progressive refinement.
                                     The scene is solved until the maximum patch residue is below the threshold.
 
@@ -46,7 +46,7 @@ int main(int argc, char* argv[]) {
     cmdl({"-r", "--resolution"}, 128) >> resolution;
 
     float threshold;
-    cmdl({"-t", "--threshold"}, 0.2f) >> threshold;
+    cmdl({"-t", "--threshold"}, 0.1f) >> threshold;
     bool useProgressive = true;
 
     uint32_t iterations;
