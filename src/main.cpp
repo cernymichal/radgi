@@ -14,15 +14,16 @@ Options:
 	-r, --resolution <resolution>   Lightmap resolution (128 by default)
 
 	-t, --threshold <threshold>     Residue threshold for terminating (0.1 by default)
-                                    This is the default mode - progressive refinement.
+                                    This is the default CPU mode - progressive shooting.
                                     The scene is solved until the maximum patch residue is below the threshold.
 
-	-i, --iterations <iterations>   Number of iterations through the whole scene
-     			                    When set, -t is ignored and the scene is solved uniformly.
+	-i, --iterations <iterations>   Number of gathering iterations through the whole scene
+     			                    When set, -t is ignored and the scene is solved by gathering instead of shooting.
 
-	-p, --padding <radius>          Extrapolate lightmap regions with the given radius in pixels (2 by default)
+	-d, --dilation <radius>         Extrapolate lightmap islands with the given radius in pixels (2 by default)
 
-    -g, --gpu                       Use GPU acceleration (not implemented yet)
+    -g, --gpu                       Use GPU acceleration (not implemented yet) (4 iterations by default)
+                                    Only the gathering mode is supported on the GPU. -t is ignored.
 
     -h, --help                      Print this help message
 
@@ -47,16 +48,16 @@ int main(int argc, char* argv[]) {
 
     float threshold;
     cmdl({"-t", "--threshold"}, 0.1f) >> threshold;
-    bool useProgressive = true;
-
-    uint32_t iterations;
-    if (cmdl({"-i", "--iterations"}) >> iterations)
-        useProgressive = false;
-
-    uint32_t paddingRadius;
-    cmdl({"-p", "--padding"}, 2) >> paddingRadius;
+    bool useShooting = true;
 
     bool useGPU = cmdl[{"-g", "--gpu"}];
+
+    uint32_t iterations = 4;
+    if (cmdl({"-i", "--iterations"}) >> iterations || useGPU)
+        useShooting = false;
+
+    uint32_t dilationRadius;
+    cmdl({"-d", "--dilation"}, 2) >> dilationRadius;
 
     auto lightmapSize = uvec2(resolution);
     auto scene = makeRef<Scene>();
@@ -65,24 +66,36 @@ int main(int argc, char* argv[]) {
     RadiositySolver solver(lightmapSize);
     solver.initialize(scene);
 
-#define OUTPUT_PATCH_GEOMETRY
+// #define OUTPUT_PATCH_GEOMETRY
 #ifdef OUTPUT_PATCH_GEOMETRY
     saveMesh("patches.obj", solver.createPatchGeometry());
 #endif
 
     LOG("Solving");
 
-    auto start = std::chrono::high_resolution_clock::now();
-    if (useProgressive)
-        solver.solveProgressive(threshold);
-    else
-        solver.solveUniform(iterations);
-    auto finish = std::chrono::high_resolution_clock::now();
+    std::chrono::steady_clock::time_point start, finish;
+
+    if (useGPU) {
+        LOG("Using GPU mode");
+
+        start = std::chrono::high_resolution_clock::now(),
+        finish = std::chrono::high_resolution_clock::now();
+    }
+    else {
+        LOG("Using CPU mode");
+
+        start = std::chrono::high_resolution_clock::now();
+        if (useShooting)
+            solver.solveShooting(threshold);
+        else
+            solver.solveGathering(iterations);
+        finish = std::chrono::high_resolution_clock::now();
+    }
 
     LOG(std::format("Solved in {:.2f}s", std::chrono::duration_cast<std::chrono::milliseconds>(finish - start).count() / 1000.0));
 
-    LOG("Adding padding to the lightmap");
-    solver.addPadding(paddingRadius);
+    LOG("Dilating the lightmap");
+    solver.dilateLightmap(dilationRadius);
 
     solver.lightmap().save(outputFile, true);
 

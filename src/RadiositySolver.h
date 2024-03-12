@@ -43,15 +43,15 @@ public:
 
     void initialize(const Ref<Scene>& scene);
 
-    void solveProgressive(float residueThreshold = 0.2);
+    void solveShooting(float residueThreshold = 0.2);
 
-    void solveUniform(uint32_t iterations = 4);
+    void solveGathering(uint32_t iterations = 4);
 
     const Texture<vec3>& lightmap() const {
         return m_lightmapAccumulated;
     }
 
-    void addPadding(uint32_t radius = 2);
+    void dilateLightmap(uint32_t radius = 2);
 
     std::vector<Face> createPatchGeometry() const;
 
@@ -63,7 +63,9 @@ private:
 
     uvec2 m_maxResiduePatchIdx = uvec2(0);
 
-    float shoot(uvec2 source, float residueThreshold = 0);
+    float shoot(uvec2 sourceIdx, float residueThreshold = 0);
 
-    std::pair<float, float> calculateFormFactor(const Patch& source, const Patch& destination);
+    float gather(uvec2 destinationIdx);
+
+    float calculateFormFactor(const Patch& source, const Patch& destination);
 };

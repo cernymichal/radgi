@@ -28,9 +28,8 @@ static vec3 randomPointOnPatch(const Patch& patch) {
     return patch.vertices[0] + random<float>() * edge0 + random<float>() * edge1;
 }
 
-std::pair<float, float> RadiositySolver::calculateFormFactor(const Patch& patchA, const Patch& patchB) {
+float RadiositySolver::calculateFormFactor(const Patch& patchA, const Patch& patchB) {
     float F = 0;
-    float visibility = 0;
 
     constexpr auto rayCount = 8;  // TODO make this a parameter
     for (uint32_t i = 0; i < rayCount; i++) {
@@ -65,8 +64,6 @@ std::pair<float, float> RadiositySolver::calculateFormFactor(const Patch& patchA
         if (hit)  // visibility test failed
             continue;
 
-        visibility += 1;
-
         auto r2 = glm::length2(rayTarget - rayOrigin);
         auto cosines = glm::dot(rayDirection, patchA.face->normal) * glm::dot(-rayDirection, patchB.face->normal);
         auto deltaF = cosines * patchB.area / (PI * r2);  // + patchB.area / rayCount);
@@ -75,7 +72,7 @@ std::pair<float, float> RadiositySolver::calculateFormFactor(const Patch& patchA
             F += deltaF;
     }
 
-    return {F / rayCount, visibility / rayCount};
+    return F / rayCount;
 }
 
 std::tuple<std::array<vec2, 4>, uint8_t> faceTexelIntersection(const Face& face, const std::array<vec2, 4>& texelVertices) {
@@ -211,7 +208,7 @@ void RadiositySolver::initialize(const Ref<Scene>& scene) {
     m_maxResiduePatchIdx = maxResiduePatch;
 }
 
-void RadiositySolver::solveProgressive(float residueThreshold) {
+void RadiositySolver::solveShooting(float residueThreshold) {
     for (uint32_t i = 0;; i++) {
         auto residue = shoot(m_maxResiduePatchIdx, residueThreshold);
         if (residue <= residueThreshold)
@@ -222,12 +219,12 @@ void RadiositySolver::solveProgressive(float residueThreshold) {
     }
 }
 
-void RadiositySolver::solveUniform(uint32_t iterations) {
+void RadiositySolver::solveGathering(uint32_t iterations) {
     for (uint32_t i = 0; i < iterations; i++) {
         auto sourceIdx = uvec2(0, 0);
         for (sourceIdx.y = 0; sourceIdx.y < m_lightmapSize.y; sourceIdx.y++) {
             for (sourceIdx.x = 0; sourceIdx.x < m_lightmapSize.x; sourceIdx.x++) {
-                shoot(sourceIdx, 0);
+                gather(sourceIdx);
             }
         }
         LOG(std::format("Iteration {}/{}", i + 1, iterations));
@@ -269,7 +266,7 @@ float RadiositySolver::shoot(uvec2 sourceIdx, float residueThreshold) {
             if (glm::dot(sightLine, source.face->normal) <= 0 || glm::dot(-sightLine, receiver.face->normal) <= 0)
                 continue;
 
-            auto [F, visibility] = calculateFormFactor(source, receiver);
+            auto F = calculateFormFactor(source, receiver);
 
             if (F == 0)
                 continue;
@@ -295,10 +292,15 @@ float RadiositySolver::shoot(uvec2 sourceIdx, float residueThreshold) {
     return shotRad;  // return the amount of light shot
 }
 
-void RadiositySolver::addPadding(uint32_t radius) {
-    Texture<bool> extrapolatedThisIter(m_lightmapSize);
+float RadiositySolver::gather(uvec2 destinationIdx) {
+    // TODO implement
+    return 0;
+}
+
+void RadiositySolver::dilateLightmap(uint32_t radius) {
+    Texture<bool> dilatedThisStep(m_lightmapSize);
     for (uint32_t i = 0; i < radius; i++) {
-        extrapolatedThisIter.clear(false);
+        dilatedThisStep.clear(false);
         for (uint32_t y = 0; y < m_lightmapSize.y; y++) {
             for (uint32_t x = 0; x < m_lightmapSize.x; x++) {
                 auto idx = uvec2(x, y);
@@ -316,14 +318,14 @@ void RadiositySolver::addPadding(uint32_t radius) {
 
                         auto sampleIdx = uvec2(x + dx, y + dy);
 
-                        if (m_lightmapPatches[sampleIdx].face != nullptr && !extrapolatedThisIter[sampleIdx]) {
+                        if (m_lightmapPatches[sampleIdx].face != nullptr && !dilatedThisStep[sampleIdx]) {
                             m_lightmapAccumulated[idx] = m_lightmapAccumulated[sampleIdx];
                             m_lightmapPatches[idx].face = m_lightmapPatches[sampleIdx].face;
-                            extrapolatedThisIter[idx] = true;
+                            dilatedThisStep[idx] = true;
                             break;
                         }
                     }
-                    if (extrapolatedThisIter[idx])
+                    if (dilatedThisStep[idx])
                         break;
                 }
             }
