@@ -1,6 +1,6 @@
 #include "Texture.h"
 
-#include "RadiositySolver.h"
+#include "Scene.h"
 
 #define TINYEXR_IMPLEMENTATION
 #define TINYEXR_USE_MINIZ 0
@@ -170,7 +170,7 @@ void Texture<T>::save(const std::filesystem::path& filePath, bool flipVertically
     header.num_channels = image.num_channels;
     header.pixel_types = pixelTypes.data();
     header.requested_pixel_types = requestedPixelTypes.data();
-    header.compression_type = TINYEXR_COMPRESSIONTYPE_ZIP; // TINYEXR_COMPRESSIONTYPE_PIZ;
+    header.compression_type = TINYEXR_COMPRESSIONTYPE_ZIP;  // TINYEXR_COMPRESSIONTYPE_PIZ;
 
     const char* error;
     int status = SaveEXRImageToFile(&image, &header, pathString.c_str(), &error);

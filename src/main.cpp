@@ -1,10 +1,12 @@
 #include <argh.h>
 
-#include "RadiositySolver.h"
+#include "GISolver/GPUSolver.h"
+#include "GISolver/GatheringSolver.h"
+#include "GISolver/ProgressiveSolver.h"
 #include "Scene.h"
 
 auto constexpr USAGE =
-    R"(Usage: radgi <input_file> [-o output_file] [-r resolution] [-t threshold] [-i iterations] [-e radius]
+    R"(Usage: radgi <input_file> [-o output_file] [-r resolution] [-t threshold] [-i bounces] [-e radius]
 
 Options:
     <input_file>                    Input scene in .obj format
@@ -17,12 +19,12 @@ Options:
                                     This is the default CPU mode - progressive shooting.
                                     The scene is solved until the maximum patch residue is below the threshold.
 
-	-i, --iterations <iterations>   Number of gathering iterations through the whole scene
+	-b, --bounces <bounces>         Number of gathering bounces through the whole scene
      			                    When set, -t is ignored and the scene is solved by gathering instead of shooting.
 
 	-d, --dilation <radius>         Extrapolate lightmap islands with the given radius in pixels (2 by default)
 
-    -g, --gpu                       Use GPU acceleration (not implemented yet) (4 iterations by default)
+    -g, --gpu                       Use GPU acceleration (not implemented yet) (4 bounces by default)
                                     Only the gathering mode is supported on the GPU. -t is ignored.
 
     -h, --help                      Print this help message
@@ -52,52 +54,50 @@ int main(int argc, char* argv[]) {
 
     bool useGPU = cmdl[{"-g", "--gpu"}];
 
-    uint32_t iterations = 4;
-    if (cmdl({"-i", "--iterations"}) >> iterations || useGPU)
+    uint32_t bounces = 4;
+    if (cmdl({"-b", "--bounces"}) >> bounces || useGPU)
         useShooting = false;
 
     uint32_t dilationRadius;
     cmdl({"-d", "--dilation"}, 2) >> dilationRadius;
 
     auto lightmapSize = uvec2(resolution);
-    auto scene = makeRef<Scene>();
-    scene->faces = loadMesh(inputFile);
 
-    RadiositySolver solver(lightmapSize);
-    solver.initialize(scene);
+    auto scene = makeRef<Scene>();
+    scene->addMesh(loadMesh(inputFile));
+    scene->initialize(lightmapSize);
 
 // #define OUTPUT_PATCH_GEOMETRY
 #ifdef OUTPUT_PATCH_GEOMETRY
-    saveMesh("patches.obj", solver.createPatchGeometry());
+    saveMesh("patches.obj", scene.createPatchGeometry());
 #endif
 
-    LOG("Solving");
-
-    std::chrono::steady_clock::time_point start, finish;
-
+    Ref<IGISolver> solver;
     if (useGPU) {
         LOG("Using GPU mode");
-
-        start = std::chrono::high_resolution_clock::now(),
-        finish = std::chrono::high_resolution_clock::now();
+        solver = makeRef<GPUSolver>(bounces);
     }
     else {
         LOG("Using CPU mode");
-
-        start = std::chrono::high_resolution_clock::now();
         if (useShooting)
-            solver.solveShooting(threshold);
+            solver = makeRef<ProgressiveSolver>(threshold);
         else
-            solver.solveGathering(iterations);
-        finish = std::chrono::high_resolution_clock::now();
+            solver = makeRef<GatheringSolver>(bounces);
     }
+
+    solver->initialize(scene);
+
+    LOG("Solving");
+    auto start = std::chrono::high_resolution_clock::now();
+    auto lightmap = solver->solve();
+    auto finish = std::chrono::high_resolution_clock::now();
 
     LOG(std::format("Solved in {:.2f}s", std::chrono::duration_cast<std::chrono::milliseconds>(finish - start).count() / 1000.0));
 
     LOG("Dilating the lightmap");
-    solver.dilateLightmap(dilationRadius);
+    scene->dilateLightmap(lightmap, dilationRadius);
 
-    solver.lightmap().save(outputFile, true);
+    lightmap.save(outputFile, true);
 
     return EXIT_SUCCESS;
 }

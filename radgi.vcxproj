@@ -19,6 +19,8 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\GISolver\GatheringSolver.cpp" />
+    <ClCompile Include="src\GISolver\GPUSolver.cpp" />
     <ClCompile Include="src\Mesh.cpp" />
     <ClCompile Include="src\pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
@@ -27,13 +29,18 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="src\main.cpp" />
-    <ClCompile Include="src\RadiositySolver.cpp" />
+    <ClCompile Include="src\GISolver\IGISolver.cpp" />
+    <ClCompile Include="src\GISolver\ProgressiveSolver.cpp" />
+    <ClCompile Include="src\Scene.cpp" />
     <ClCompile Include="src\Texture.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\GISolver\GatheringSolver.h" />
+    <ClInclude Include="src\GISolver\GPUSolver.h" />
     <ClInclude Include="src\Mesh.h" />
     <ClInclude Include="src\pch.h" />
-    <ClInclude Include="src\RadiositySolver.h" />
+    <ClInclude Include="src\GISolver\IGISolver.h" />
+    <ClInclude Include="src\GISolver\ProgressiveSolver.h" />
     <ClInclude Include="src\Scene.h" />
     <ClInclude Include="src\Texture.h" />
     <ClInclude Include="src\Utils\Log.h" />
@@ -143,6 +150,7 @@
       <ForcedUsingFiles>
       </ForcedUsingFiles>
       <ForcedIncludeFiles>pch.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <AdditionalOptions>/openmp:llvm %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -166,6 +174,7 @@
       <ForcedUsingFiles>
       </ForcedUsingFiles>
       <ForcedIncludeFiles>pch.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <AdditionalOptions>/openmp:llvm %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -189,6 +198,7 @@
       <ForcedUsingFiles>
       </ForcedUsingFiles>
       <ForcedIncludeFiles>pch.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <AdditionalOptions>/openmp:llvm %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -212,6 +222,7 @@
       <ForcedUsingFiles>
       </ForcedUsingFiles>
       <ForcedIncludeFiles>pch.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <AdditionalOptions>/openmp:llvm %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>

@@ -3,6 +3,8 @@
 template <typename T>
 class Texture {
 public:
+    Texture() = default;
+
     Texture(const uvec2& size) : m_size(size) {
         m_data = new T[m_size.x * m_size.y];
     }
