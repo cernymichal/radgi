@@ -20,7 +20,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\GISolver\GatheringSolver.cpp" />
-    <ClCompile Include="src\GISolver\GPUSolver.cpp" />
+    <ClCompile Include="src\GISolver\CUDASolver\CUDASolver.cpp" />
     <ClCompile Include="src\Mesh.cpp" />
     <ClCompile Include="src\pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
@@ -35,8 +35,10 @@
     <ClCompile Include="src\Texture.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\GISolver\CUDASolver\CUDAStructs.h" />
+    <ClInclude Include="src\GISolver\CUDASolver\helper_math.h" />
     <ClInclude Include="src\GISolver\GatheringSolver.h" />
-    <ClInclude Include="src\GISolver\GPUSolver.h" />
+    <ClInclude Include="src\GISolver\CUDASolver\CUDASolver.h" />
     <ClInclude Include="src\Mesh.h" />
     <ClInclude Include="src\pch.h" />
     <ClInclude Include="src\GISolver\IGISolver.h" />
@@ -47,6 +49,9 @@
     <ClInclude Include="src\Utils\Math.h" />
     <ClInclude Include="src\Utils\Ptr.h" />
     <ClInclude Include="src\Utils\Random.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="src\GISolver\CUDASolver\radiosity.cu" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
@@ -84,6 +89,7 @@
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 12.4.props" />
   </ImportGroup>
   <ImportGroup Label="Shared">
   </ImportGroup>
@@ -204,6 +210,13 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
+    <CudaCompile>
+      <CompileOut>$(SolutionDir)bin\intermediates\$(Platform)\$(Configuration)\%(Filename)%(Extension).obj</CompileOut>
+    </CudaCompile>
+    <CudaCompile>
+      <Keep>false</Keep>
+      <KeepDir>$(SolutionDir)bin\intermediates\$(Platform)\$(Configuration)</KeepDir>
+    </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -230,8 +243,14 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
+    <CudaCompile>
+      <CompileOut>$(SolutionDir)bin\intermediates\$(Platform)\$(Configuration)\%(Filename)%(Extension).obj</CompileOut>
+      <Keep>false</Keep>
+      <KeepDir>$(SolutionDir)bin\intermediates\$(Platform)\$(Configuration)</KeepDir>
+    </CudaCompile>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 12.4.targets" />
   </ImportGroup>
 </Project>

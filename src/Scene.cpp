@@ -21,7 +21,7 @@ std::tuple<std::array<vec2, 4>, uint8_t> faceTexelIntersection(const Face& face,
 
     // add texel vertices if they are inside the face
     for (uint32_t i = 0; i < 4; i++) {
-        vec3 barycentric = barycentricCoordinates(narrowToTriangle(face.lightmapUVs), texelVertices[i]);
+        vec3 barycentric = barycentricCoordinates(face.lightmapUVs, texelVertices[i]);
         if (glm::all(barycentric >= vec3(0)))
             intersectionVertices[intersectionVertexCount++] = texelVertices[i];
     }
@@ -96,8 +96,6 @@ void Scene::initialize(const uvec2& lightmapSize) {
     // rasterize the scene faces into the lightmap
     auto texelSize = 1.0f / vec2(m_patches.size());
     for (auto& face : m_faces) {
-        assert(face.vertexCount == 3);
-
         vec2 min = glm::min(glm::min(face.lightmapUVs[0], face.lightmapUVs[1]), face.lightmapUVs[2]);
         vec2 max = glm::max(glm::max(face.lightmapUVs[0], face.lightmapUVs[1]), face.lightmapUVs[2]);
 
@@ -127,7 +125,7 @@ void Scene::initialize(const uvec2& lightmapSize) {
                 // translate the texel vertices to world space
                 std::array<vec3, 4> patchVerticesWS;
                 for (uint32_t i = 0; i < patchVertexCount; i++) {
-                    vec3 barycentric = barycentricCoordinates(narrowToTriangle(face.lightmapUVs), patchVertices[i]);
+                    vec3 barycentric = barycentricCoordinates(face.lightmapUVs, patchVertices[i]);
                     patchVerticesWS[i] = barycentric.x * face.vertices[0] + barycentric.y * face.vertices[1] + barycentric.z * face.vertices[2];
                 }
 
@@ -145,10 +143,18 @@ std::vector<Face> Scene::createPatchGeometry() const {
             if (patch.face == nullptr)
                 continue;
 
-            auto& face = geometry.emplace_back();
-            face.vertexCount = patch.vertexCount;
-            for (uint32_t i = 0; i < patch.vertexCount; i++)
-                face.vertices[i] = patch.vertices[i];
+            if (patch.vertexCount >= 3) {
+                auto& face = geometry.emplace_back();
+                for (uint32_t i = 0; i < 3; i++)
+                    face.vertices[i] = patch.vertices[i];
+            }
+
+            if (patch.vertexCount == 4) {
+                auto& face = geometry.emplace_back();
+                face.vertices[0] = patch.vertices[0];
+                face.vertices[1] = patch.vertices[2];
+                face.vertices[2] = patch.vertices[3];
+            }
         }
     }
     return geometry;

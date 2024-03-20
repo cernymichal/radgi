@@ -5,13 +5,14 @@ class Texture {
 public:
     Texture() = default;
 
-    Texture(const uvec2& size) : m_size(size) {
-        m_data = new T[m_size.x * m_size.y];
+    Texture(const uvec2& size, T*&& data = nullptr) : m_size(size), m_data(data) {
+        if (!m_data)
+            m_data = new T[m_size.x * m_size.y];
     }
 
     Texture(const std::filesystem::path& filePath, bool flipVertically = false);
 
-    Texture(const Texture& other) = delete;
+    Texture(const Texture& other) = delete;  // TODO
 
     Texture(Texture&& other) noexcept {
         m_size = other.m_size;

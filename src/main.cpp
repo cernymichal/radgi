@@ -1,6 +1,6 @@
 #include <argh.h>
 
-#include "GISolver/GPUSolver.h"
+#include "GISolver/CUDASolver/CUDASolver.h"
 #include "GISolver/GatheringSolver.h"
 #include "GISolver/ProgressiveSolver.h"
 #include "Scene.h"
@@ -24,7 +24,7 @@ Options:
 
 	-d, --dilation <radius>         Extrapolate lightmap islands with the given radius in pixels (2 by default)
 
-    -g, --gpu                       Use GPU acceleration (not implemented yet) (4 bounces by default)
+    -g, --gpu                       Use CUDA acceleration (4 bounces by default)
                                     Only the gathering mode is supported on the GPU. -t is ignored.
 
     -h, --help                      Print this help message
@@ -52,10 +52,10 @@ int main(int argc, char* argv[]) {
     cmdl({"-t", "--threshold"}, 0.1f) >> threshold;
     bool useShooting = true;
 
-    bool useGPU = cmdl[{"-g", "--gpu"}];
+    bool useCUDA = cmdl[{"-g", "--gpu"}];
 
     uint32_t bounces = 4;
-    if (cmdl({"-b", "--bounces"}) >> bounces || useGPU)
+    if (cmdl({"-b", "--bounces"}) >> bounces || useCUDA)
         useShooting = false;
 
     uint32_t dilationRadius;
@@ -73,9 +73,9 @@ int main(int argc, char* argv[]) {
 #endif
 
     Ref<IGISolver> solver;
-    if (useGPU) {
+    if (useCUDA) {
         LOG("Using GPU mode");
-        solver = makeRef<GPUSolver>(bounces);
+        solver = makeRef<CUDASolver>(bounces);
     }
     else {
         LOG("Using CPU mode");

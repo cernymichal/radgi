@@ -44,8 +44,7 @@ std::vector<Face> loadMesh(const std::filesystem::path& filePath) {
             face.material = materialRefs[shapes[s].mesh.material_ids[f]];
 
             size_t fv = size_t(shapes[s].mesh.num_face_vertices[f]);
-            assert(fv == 3 || fv == 4);
-            face.vertexCount = fv;
+            assert(fv == 3);
             for (size_t v = 0; v < fv; v++) {
                 tinyobj::index_t idx = shapes[s].mesh.indices[index_offset + v];
 
@@ -80,15 +79,13 @@ void saveMesh(const std::filesystem::path& filePath, const std::vector<Face>& fa
     auto patchIdx = uvec2(0, 0);
     auto vertexI = 1;
     for (auto& face : faces) {
-        for (uint32_t i = 0; i < face.vertexCount; i++) {
+        for (uint32_t i = 0; i < 3; i++) {
             auto vertex = face.vertices[i];
             file << std::format("v {} {} {}\n", vertex.x, vertex.y, vertex.z);
             vertexI++;
         }
-        if (face.vertexCount == 3)
-            file << std::format("f {} {} {}\n", vertexI - 3, vertexI - 2, vertexI - 1);
-        else if (face.vertexCount == 4)
-            file << std::format("f {} {} {} {}\n", vertexI - 4, vertexI - 3, vertexI - 2, vertexI - 1);
+
+        file << std::format("f {} {} {}\n", vertexI - 3, vertexI - 2, vertexI - 1);
     }
 
     file.close();

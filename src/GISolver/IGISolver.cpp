@@ -10,7 +10,7 @@ static vec3 randomPointOnPatch(const Patch& patch) {
 
     auto edge0 = patch.vertices[1] - patch.vertices[0];
     auto edge1 = patch.vertices[3] - patch.vertices[0];
-    return patch.vertices[0] + random<float>() * edge0 + random<float>() * edge1;
+    return patch.vertices[0] + random<float>() * edge0 + random<float>() * edge1; // TODO this is wrong
 }
 
 float calculateFormFactor(const Patch& patchA, const Patch& patchB, const Scene& scene) {
@@ -36,7 +36,7 @@ float calculateFormFactor(const Patch& patchA, const Patch& patchB, const Scene&
             if (face == *patchA.face || face == *patchB.face)
                 continue;
 
-            auto t = rayTriangleIntersection(rayOrigin, rayDirection, narrowToTriangle(face.vertices));
+            auto t = rayTriangleIntersection(rayOrigin, rayDirection, face.vertices);
             if (std::isnan(t))
                 continue;
 

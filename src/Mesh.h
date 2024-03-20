@@ -6,10 +6,9 @@ struct Material {
 };
 
 struct Face {
-    std::array<vec3, 4> vertices;
-    uint8_t vertexCount;
+    std::array<vec3, 3> vertices; // CCW, only triangles are supported
     vec3 normal;
-    std::array<vec2, 4> lightmapUVs;
+    std::array<vec2, 3> lightmapUVs;
     Ref<Material> material;
 
     bool operator==(const Face& other) const {
@@ -20,8 +19,3 @@ struct Face {
 std::vector<Face> loadMesh(const std::filesystem::path& filePath);
 
 void saveMesh(const std::filesystem::path& filePath, const std::vector<Face>& faces);
-
-template <int C, int L, typename T, glm::qualifier Q>
-constexpr inline const std::array<glm::vec<L, T, Q>, 3>& narrowToTriangle(const std::array<glm::vec<L, T, Q>, C>& array) {
-    return reinterpret_cast<const std::array<glm::vec<L, T, Q>, 3>&>(array);
-}

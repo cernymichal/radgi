@@ -39,7 +39,7 @@
     <ClCompile Include="src\Scene.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\GISolver\GPUSolver.cpp">
+    <ClCompile Include="src\GISolver\CUDASolver\CUDASolver.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -77,8 +77,17 @@
     <ClInclude Include="src\GISolver\GatheringSolver.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\GISolver\GPUSolver.h">
+    <ClInclude Include="src\GISolver\CUDASolver\CUDASolver.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\GISolver\CUDASolver\CUDAStructs.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\GISolver\CUDASolver\helper_math.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="src\GISolver\CUDASolver\radiosity.cu" />
   </ItemGroup>
 </Project>

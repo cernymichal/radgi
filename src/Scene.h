@@ -34,13 +34,21 @@ public:
     Scene() = default;
 
     void addMesh(const std::vector<Face>& mesh) {
-        m_faces.insert(m_faces.end(), mesh.begin(), mesh.end());
+        m_faces.reserve(m_faces.size() + mesh.size());
+        for (const auto& face : mesh) {
+            m_faces.push_back(face);
+            m_materials.insert(face.material);
+        }
     }
 
     void initialize(const uvec2& lightmapSize);
 
     const std::vector<Face>& faces() const {
         return m_faces;
+    }
+
+    const std::unordered_set<Ref<Material>>& materials() const {
+        return m_materials;
     }
 
     const uvec2& lightmapSize() const {
@@ -53,10 +61,11 @@ public:
 
     std::vector<Face> createPatchGeometry() const;
 
-    void dilateLightmap(Texture<vec3>& lightmap, uint32_t radius = 2); // TODO move out of here and make const
+    void dilateLightmap(Texture<vec3>& lightmap, uint32_t radius = 2);  // TODO move out of here and make const
 
 private:
     std::vector<Face> m_faces;
+    std::unordered_set<Ref<Material>> m_materials;
     uvec2 m_lightmapSize;
     Texture<Patch> m_patches;
 };
