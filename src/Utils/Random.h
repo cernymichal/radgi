@@ -21,7 +21,7 @@ struct SplitMix64 {
     /*
      * @brief Constructs a new instance seeded by the current time.
      */
-    explicit SplitMix64() : SplitMix64(std::chrono::system_clock::now().time_since_epoch().count()) {}
+    explicit SplitMix64() : SplitMix64(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count()) {}
 
     /*
      * @brief Generates a random uint64 and updates the state.

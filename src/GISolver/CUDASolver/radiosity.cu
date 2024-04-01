@@ -1,23 +1,48 @@
 #include <math_constants.h>
 #include <stdio.h>
 
+#include <chrono>
+
 #include "CUDAStructs.h"
 #include "helper_math.h"
 
 using namespace CUDAStructs;
 
-__device__ float3 randomPointOnPatch(const Patch& patch) {
+struct Scene {
+    Patch* patches;
+    Face* faces;
+    uint32_t faceCount;
+    Material* materials;
+};
+
+struct RNG {
+    uint32_t state;
+
+    __device__ explicit constexpr RNG(uint32_t seed) : state(seed) {}
+
+    __device__ constexpr inline float operator()(float min = 0.0f, float max = 1.0f) {
+        // https://www.reedbeta.com/blog/hash-functions-for-gpu-rendering/
+        // PCG PRNG
+        state = state * 747796405u + 2891336453u;
+        uint32_t word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+        auto randomValue = (word >> 22u) ^ word;
+
+        // map to a float in [min, max]
+        return min + (max - min) * static_cast<float>(randomValue) / static_cast<float>(uint32_t(-1));
+    }
+};
+
+__device__ float3 randomPointOnPatch(const Patch& patch, RNG& rng) {
     if (patch.vertexCount == 3) {
-        auto u = 0.3f;  // random<float>(); TODO GPU random
-        auto v = 0.3f;  // random<float>(0, 1.0f - u);
+        auto u = rng();
+        auto v = rng(0, 1.0f - u);
         auto w = 1.0f - u - v;
         return u * patch.vertices[0] + v * patch.vertices[1] + w * patch.vertices[2];
     }
 
     auto edge0 = patch.vertices[1] - patch.vertices[0];
     auto edge1 = patch.vertices[3] - patch.vertices[0];
-    // return patch.vertices[0] + random<float>() * edge0 + random<float>() * edge1; TODO GPU random
-    return patch.vertices[0] + 0.5f * edge0 + 0.5f * edge1;  // TODO this is wrong
+    return patch.vertices[0] + rng() * edge0 + rng() * edge1;  // TODO this is wrong
 }
 
 __device__ float rayTriangleIntersection(const float3& rayOrigin, const float3& rayDirection, const float3 vertices[3]) {
@@ -52,24 +77,24 @@ __device__ float rayTriangleIntersection(const float3& rayOrigin, const float3& 
     return t;
 }
 
-__device__ float calculateFormFactor(const Patch& patchA, const Patch& patchB, uint32_t sceneFaceCount, const Face* sceneFaces) {
+__device__ float calculateFormFactor(const Patch& patchA, const Patch& patchB, const Scene& scene, RNG& rng) {
     float F = 0;
 
     constexpr auto rayCount = 8;  // TODO make this a parameter
     for (uint32_t i = 0; i < rayCount; i++) {
-        auto rayOrigin = randomPointOnPatch(patchA);
-        auto rayTarget = randomPointOnPatch(patchB);
+        auto rayOrigin = randomPointOnPatch(patchA, rng);
+        auto rayTarget = randomPointOnPatch(patchB, rng);
 
         // visibility test
         auto targetDistance = length(rayTarget - rayOrigin);
         auto rayDirection = (rayTarget - rayOrigin) / targetDistance;
 
-        if (dot(rayDirection, sceneFaces[patchA.faceId].normal) <= 0 || dot(-rayDirection, sceneFaces[patchB.faceId].normal) <= 0)
+        if (dot(rayDirection, scene.faces[patchA.faceId].normal) <= 0 || dot(-rayDirection, scene.faces[patchB.faceId].normal) <= 0)
             continue;
 
         bool hit = false;
-        for (uint32_t i = 0; i < sceneFaceCount; i++) {
-            auto& face = sceneFaces[i];
+        for (uint32_t i = 0; i < scene.faceCount; i++) {
+            auto& face = scene.faces[i];
             if (dot(-rayDirection, face.normal) <= 0)
                 continue;
 
@@ -91,7 +116,7 @@ __device__ float calculateFormFactor(const Patch& patchA, const Patch& patchB, u
 
         auto ray = rayTarget - rayOrigin;
         auto r2 = dot(ray, ray);
-        auto cosines = dot(rayDirection, sceneFaces[patchA.faceId].normal) * dot(-rayDirection, sceneFaces[patchB.faceId].normal);
+        auto cosines = dot(rayDirection, scene.faces[patchA.faceId].normal) * dot(-rayDirection, scene.faces[patchB.faceId].normal);
         auto deltaF = cosines * patchB.area / (CUDART_PI_F * r2);  // + patchB.area / rayCount);
 
         if (deltaF > 0)
@@ -101,54 +126,56 @@ __device__ float calculateFormFactor(const Patch& patchA, const Patch& patchB, u
     return F / rayCount;
 }
 
-__global__ void gather(int2 lightmapSize, float3* lightmap, float3* residues, float3* nextResidues, Patch* patches, uint32_t sceneFaceCount, Face* sceneFaces, Material* materials) {
+__global__ void gather(int2 lightmapSize, float3* lightmap, float3* residues, float3* nextResidues, const Scene scene, uint32_t rngSeed) {
     int2 destinationST = make_int2(blockIdx.x * blockDim.x + threadIdx.x, blockIdx.y * blockDim.y + threadIdx.y);
     if (destinationST.x >= lightmapSize.x || destinationST.y >= lightmapSize.y)
         return;
 
     int destinationIdx = destinationST.y * lightmapSize.x + destinationST.x;
-    auto& destination = patches[destinationIdx];
+    auto& destination = scene.patches[destinationIdx];
 
     if (destination.faceId == NULL_ID)
         return;  // nothing to solve
+
+    RNG rng(rngSeed + destinationIdx);
 
     // shoot to other patches
     auto shooterST = make_int2(0, 0);
     for (shooterST.y = 0; shooterST.y < lightmapSize.y; shooterST.y++) {
         for (shooterST.x = 0; shooterST.x < lightmapSize.x; shooterST.x++) {
             auto shooterIdx = shooterST.y * lightmapSize.x + shooterST.x;
-            auto& shooter = patches[shooterIdx];
+            auto& shooter = scene.patches[shooterIdx];
             auto shooterResidue = residues[shooterIdx];
             if (shooter.faceId == NULL_ID || shooterIdx == destinationIdx || shooter.faceId == destination.faceId || (shooterResidue.x == 0 && shooterResidue.y == 0 && shooterResidue.z == 0))
                 continue;
 
             // check if the patches are facing each other
             auto sightLine = normalize(shooter.center - destination.center);
-            if (dot(sightLine, sceneFaces[destination.faceId].normal) <= 0 || dot(-sightLine, sceneFaces[shooter.faceId].normal) <= 0)
+            if (dot(sightLine, scene.faces[destination.faceId].normal) <= 0 || dot(-sightLine, scene.faces[shooter.faceId].normal) <= 0)
                 continue;
 
-            auto F = calculateFormFactor(shooter, destination, sceneFaceCount, sceneFaces);
+            auto F = calculateFormFactor(shooter, destination, scene, rng);
             if (F == 0)
                 continue;
 
-            auto deltaRad = materials[sceneFaces[destination.faceId].materialId].albedo * shooterResidue * F * shooter.area / destination.area;
+            auto deltaRad = scene.materials[scene.faces[destination.faceId].materialId].albedo * shooterResidue * F * shooter.area / destination.area;
             nextResidues[destinationIdx] += deltaRad;
             lightmap[destinationIdx] += deltaRad;
         }
     }
 }
 
-__global__ void initTextures(int2 lightmapSize, float3* lightmap, float3* residues, float3* nextResidues, Patch* patches, uint32_t sceneFaceCount, Face* sceneFaces, Material* materials) {
+__global__ void initTextures(int2 lightmapSize, float3* lightmap, float3* residues, float3* nextResidues, const Scene scene) {
     int2 texelST = make_int2(blockIdx.x * blockDim.x + threadIdx.x, blockIdx.y * blockDim.y + threadIdx.y);
     if (texelST.x >= lightmapSize.x || texelST.y >= lightmapSize.y)
         return;
 
     auto patchIdx = texelST.y * lightmapSize.x + texelST.x;
-    auto& patch = patches[patchIdx];
+    auto& patch = scene.patches[patchIdx];
 
     float3 residue;
     if (patch.faceId != NULL_ID)
-        residue = materials[sceneFaces[patch.faceId].materialId].emission;
+        residue = scene.materials[scene.faces[patch.faceId].materialId].emission;
     else
         residue = make_float3(0, 0, 0);
 
@@ -182,10 +209,13 @@ __host__ extern "C" float3* solveRadiosityCUDA(uint32_t bounces, int2 lightmapSi
     dim3 blockSize(16, 16);  // TODO optimize for SM occupancy
     dim3 blocks(ceil(lightmapSize.x / static_cast<double>(blockSize.x)), ceil(lightmapSize.y / static_cast<double>(blockSize.y)));
 
-    initTextures<<<blocks, blockSize>>>(lightmapSize, lightmapDevice, residuesDevice, nextResiduesDevice, patchesDevice, sceneFaceCount, sceneFacesDevice, materialsDevice);
+    Scene scene{patchesDevice, sceneFacesDevice, static_cast<uint32_t>(sceneFaceCount), materialsDevice};
+
+    initTextures<<<blocks, blockSize>>>(lightmapSize, lightmapDevice, residuesDevice, nextResiduesDevice, scene);
 
     for (size_t bounce = 0; bounce < bounces; bounce++) {
-        gather<<<blocks, blockSize>>>(lightmapSize, lightmapDevice, residuesDevice, nextResiduesDevice, patchesDevice, sceneFaceCount, sceneFacesDevice, materialsDevice);
+        uint32_t rngSeed = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        gather<<<blocks, blockSize>>>(lightmapSize, lightmapDevice, residuesDevice, nextResiduesDevice, scene, rngSeed);
 
         std::swap(residuesDevice, nextResiduesDevice);
         cudaMemsetAsync(nextResiduesDevice, 0, lightmapSize.x * lightmapSize.y * sizeof(float3));
