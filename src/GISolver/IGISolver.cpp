@@ -10,7 +10,7 @@ static vec3 randomPointOnPatch(const Patch& patch) {
 
     auto edge0 = patch.vertices[1] - patch.vertices[0];
     auto edge1 = patch.vertices[3] - patch.vertices[0];
-    return patch.vertices[0] + random<float>() * edge0 + random<float>() * edge1; // TODO this is wrong
+    return patch.vertices[0] + random<float>() * edge0 + random<float>() * edge1;  // TODO this is wrong
 }
 
 float calculateFormFactor(const Patch& patchA, const Patch& patchB, const Scene& scene) {
@@ -28,6 +28,14 @@ float calculateFormFactor(const Patch& patchA, const Patch& patchB, const Scene&
         if (glm::dot(rayDirection, patchA.face->normal) <= 0 || glm::dot(-rayDirection, patchB.face->normal) <= 0)
             continue;
 
+#define USE_BVH
+#ifdef USE_BVH
+        Interval<float> tInterval = {0, targetDistance - 0.01f};  // leeway for shared edges passing through the lightmap}
+        auto intersectionPredicate = [&](float t, const Face& face) {
+            return face != *patchA.face && face != *patchB.face;
+        };
+        bool hit = scene.bvh().intersects(rayOrigin, rayDirection, tInterval, intersectionPredicate);
+#else
         bool hit = false;
         for (const auto& face : scene.faces()) {
             if (glm::dot(-rayDirection, face.normal) <= 0)
@@ -36,7 +44,7 @@ float calculateFormFactor(const Patch& patchA, const Patch& patchB, const Scene&
             if (face == *patchA.face || face == *patchB.face)
                 continue;
 
-            auto t = rayTriangleIntersection(rayOrigin, rayDirection, face.vertices);
+            float t = rayTriangleIntersection(rayOrigin, rayDirection, face.vertices);
             if (std::isnan(t))
                 continue;
 
@@ -45,13 +53,13 @@ float calculateFormFactor(const Patch& patchA, const Patch& patchB, const Scene&
                 break;
             }
         }
-
+#endif
         if (hit)  // visibility test failed
             continue;
 
-        auto r2 = glm::length2(rayTarget - rayOrigin);
-        auto cosines = glm::dot(rayDirection, patchA.face->normal) * glm::dot(-rayDirection, patchB.face->normal);
-        auto deltaF = cosines * patchB.area / (PI * r2);  // + patchB.area / rayCount);
+        float r2 = glm::length2(rayTarget - rayOrigin);
+        float cosines = glm::dot(rayDirection, patchA.face->normal) * glm::dot(-rayDirection, patchB.face->normal);
+        float deltaF = cosines * patchB.area / (PI * r2);  // + patchB.area / rayCount);
 
         if (deltaF > 0)
             F += deltaF;

@@ -19,6 +19,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\BVH.cpp" />
     <ClCompile Include="src\GISolver\GatheringSolver.cpp" />
     <ClCompile Include="src\GISolver\CUDASolver\CUDASolver.cpp" />
     <ClCompile Include="src\Mesh.cpp" />
@@ -35,8 +36,9 @@
     <ClCompile Include="src\Texture.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\BVH.h" />
     <ClInclude Include="src\GISolver\CUDASolver\CUDAStructs.h" />
-    <ClInclude Include="src\GISolver\CUDASolver\helper_math.h" />
+    <ClInclude Include="src\GISolver\CUDASolver\utils.cuh" />
     <ClInclude Include="src\GISolver\GatheringSolver.h" />
     <ClInclude Include="src\GISolver\CUDASolver\CUDASolver.h" />
     <ClInclude Include="src\Mesh.h" />
@@ -51,7 +53,10 @@
     <ClInclude Include="src\Utils\Random.h" />
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="src\GISolver\CUDASolver\radiosity.cu" />
+    <CudaCompile Include="src\GISolver\CUDASolver\radiosity.cu">
+      <FastMath Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</FastMath>
+      <FastMath Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</FastMath>
+    </CudaCompile>
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
@@ -216,6 +221,7 @@
     <CudaCompile>
       <Keep>false</Keep>
       <KeepDir>$(SolutionDir)bin\intermediates\$(Platform)\$(Configuration)</KeepDir>
+      <AdditionalOptions>--expt-relaxed-constexpr %(AdditionalOptions)</AdditionalOptions>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -247,6 +253,7 @@
       <CompileOut>$(SolutionDir)bin\intermediates\$(Platform)\$(Configuration)\%(Filename)%(Extension).obj</CompileOut>
       <Keep>false</Keep>
       <KeepDir>$(SolutionDir)bin\intermediates\$(Platform)\$(Configuration)</KeepDir>
+      <AdditionalOptions>--expt-relaxed-constexpr %(AdditionalOptions)</AdditionalOptions>
     </CudaCompile>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

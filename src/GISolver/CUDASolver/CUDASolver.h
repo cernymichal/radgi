@@ -14,8 +14,9 @@ public:
 
 protected:
     uint32_t m_bounces;
-    int2 m_lightmapSize;
+    uvec2 m_lightmapSize;
     std::vector<CUDAStructs::Material> m_materials;
     std::vector<CUDAStructs::Face> m_faces;
     std::vector<CUDAStructs::Patch> m_patches;
+    std::vector<CUDAStructs::BVH::Node> m_bvhNodes;
 };

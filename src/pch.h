@@ -1,7 +1,9 @@
 #pragma once
 
 #include <algorithm>
+#include <bit>
 #include <chrono>
+#include <concepts>
 #include <filesystem>
 #include <format>
 #include <functional>

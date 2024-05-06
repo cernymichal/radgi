@@ -1,38 +1,13 @@
-#include <math_constants.h>
 #include <stdio.h>
 
 #include <chrono>
 
 #include "CUDAStructs.h"
-#include "helper_math.h"
+#include "utils.cuh"
 
 using namespace CUDAStructs;
 
-struct Scene {
-    Patch* patches;
-    Face* faces;
-    uint32_t faceCount;
-    Material* materials;
-};
-
-struct RNG {
-    uint32_t state;
-
-    __device__ explicit constexpr RNG(uint32_t seed) : state(seed) {}
-
-    __device__ constexpr inline float operator()(float min = 0.0f, float max = 1.0f) {
-        // https://www.reedbeta.com/blog/hash-functions-for-gpu-rendering/
-        // PCG PRNG
-        state = state * 747796405u + 2891336453u;
-        uint32_t word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
-        auto randomValue = (word >> 22u) ^ word;
-
-        // map to a float in [min, max]
-        return min + (max - min) * static_cast<float>(randomValue) / static_cast<float>(uint32_t(-1));
-    }
-};
-
-__device__ float3 randomPointOnPatch(const Patch& patch, RNG& rng) {
+__device__ vec3 randomPointOnPatch(const Patch& patch, RNG& rng) {
     if (patch.vertexCount == 3) {
         auto u = rng();
         auto v = rng(0, 1.0f - u);
@@ -45,38 +20,6 @@ __device__ float3 randomPointOnPatch(const Patch& patch, RNG& rng) {
     return patch.vertices[0] + rng() * edge0 + rng() * edge1;  // TODO this is wrong
 }
 
-__device__ float rayTriangleIntersection(const float3& rayOrigin, const float3& rayDirection, const float3 vertices[3]) {
-    // X = rayOrigin + rayDirection * t
-
-    // Möller–Trumbore intersection algorithm
-    auto edge1 = vertices[1] - vertices[0];
-    auto edge2 = vertices[2] - vertices[0];
-    auto P = cross(rayDirection, edge2);
-    auto determinant = dot(edge1, P);
-
-    // if the determinant is negative, the triangle is back facing
-    // if the determinant is close to 0, the ray misses the triangle
-    if (determinant < 0.0001f)
-        return NAN;
-
-    auto determinantInv = 1.0f / determinant;
-    auto T = rayOrigin - vertices[0];
-    auto u = dot(T, P) * determinantInv;
-    if (u < 0 || u > 1)
-        return NAN;
-
-    auto Q = cross(T, edge1);
-    auto v = dot(rayDirection, Q) * determinantInv;
-    if (v < 0 || u + v > 1)
-        return NAN;
-
-    auto t = dot(edge2, Q) * determinantInv;
-    if (t < 0)
-        return NAN;
-
-    return t;
-}
-
 __device__ float calculateFormFactor(const Patch& patchA, const Patch& patchB, const Scene& scene, RNG& rng) {
     float F = 0;
 
@@ -86,16 +29,22 @@ __device__ float calculateFormFactor(const Patch& patchA, const Patch& patchB, c
         auto rayTarget = randomPointOnPatch(patchB, rng);
 
         // visibility test
-        auto targetDistance = length(rayTarget - rayOrigin);
+        auto targetDistance = glm::length(rayTarget - rayOrigin);
         auto rayDirection = (rayTarget - rayOrigin) / targetDistance;
 
-        if (dot(rayDirection, scene.faces[patchA.faceId].normal) <= 0 || dot(-rayDirection, scene.faces[patchB.faceId].normal) <= 0)
+        if (glm::dot(rayDirection, scene.faces[patchA.faceId].normal) <= 0 || glm::dot(-rayDirection, scene.faces[patchB.faceId].normal) <= 0)
             continue;
 
+#define USE_BVH
+#ifdef USE_BVH
+        Interval<float> tInterval = {0, targetDistance - 0.01f};  // leeway for shared edges passing through the lightmap
+        uint32_t excludeFaces[] = {patchA.faceId, patchB.faceId};
+        bool hit = intersectsBVH(scene, rayOrigin, rayDirection, tInterval, excludeFaces);
+#else
         bool hit = false;
         for (uint32_t i = 0; i < scene.faceCount; i++) {
             auto& face = scene.faces[i];
-            if (dot(-rayDirection, face.normal) <= 0)
+            if (glm::dot(-rayDirection, face.normal) <= 0)
                 continue;
 
             if (i == patchA.faceId || i == patchB.faceId)
@@ -110,14 +59,15 @@ __device__ float calculateFormFactor(const Patch& patchA, const Patch& patchB, c
                 break;
             }
         }
+#endif
 
         if (hit)  // visibility test failed
             continue;
 
         auto ray = rayTarget - rayOrigin;
-        auto r2 = dot(ray, ray);
-        auto cosines = dot(rayDirection, scene.faces[patchA.faceId].normal) * dot(-rayDirection, scene.faces[patchB.faceId].normal);
-        auto deltaF = cosines * patchB.area / (CUDART_PI_F * r2);  // + patchB.area / rayCount);
+        auto r2 = glm::dot(ray, ray);
+        auto cosines = glm::dot(rayDirection, scene.faces[patchA.faceId].normal) * glm::dot(-rayDirection, scene.faces[patchB.faceId].normal);
+        float deltaF = cosines * patchB.area / (PI * r2);  // + patchB.area / rayCount);
 
         if (deltaF > 0)
             F += deltaF;
@@ -126,12 +76,12 @@ __device__ float calculateFormFactor(const Patch& patchA, const Patch& patchB, c
     return F / rayCount;
 }
 
-__global__ void gather(int2 lightmapSize, float3* lightmap, float3* residues, float3* nextResidues, const Scene scene, uint32_t rngSeed) {
-    int2 destinationST = make_int2(blockIdx.x * blockDim.x + threadIdx.x, blockIdx.y * blockDim.y + threadIdx.y);
+__global__ void gather(uvec2 lightmapSize, vec3* lightmap, vec3* residues, vec3* nextResidues, const Scene scene, uint32_t rngSeed) {
+    uvec2 destinationST = uvec2(blockIdx.x * blockDim.x + threadIdx.x, blockIdx.y * blockDim.y + threadIdx.y);
     if (destinationST.x >= lightmapSize.x || destinationST.y >= lightmapSize.y)
         return;
 
-    int destinationIdx = destinationST.y * lightmapSize.x + destinationST.x;
+    auto destinationIdx = destinationST.y * lightmapSize.x + destinationST.x;
     auto& destination = scene.patches[destinationIdx];
 
     if (destination.faceId == NULL_ID)
@@ -140,7 +90,7 @@ __global__ void gather(int2 lightmapSize, float3* lightmap, float3* residues, fl
     RNG rng(rngSeed + destinationIdx);
 
     // shoot to other patches
-    auto shooterST = make_int2(0, 0);
+    auto shooterST = uvec2(0, 0);
     for (shooterST.y = 0; shooterST.y < lightmapSize.y; shooterST.y++) {
         for (shooterST.x = 0; shooterST.x < lightmapSize.x; shooterST.x++) {
             auto shooterIdx = shooterST.y * lightmapSize.x + shooterST.x;
@@ -150,8 +100,8 @@ __global__ void gather(int2 lightmapSize, float3* lightmap, float3* residues, fl
                 continue;
 
             // check if the patches are facing each other
-            auto sightLine = normalize(shooter.center - destination.center);
-            if (dot(sightLine, scene.faces[destination.faceId].normal) <= 0 || dot(-sightLine, scene.faces[shooter.faceId].normal) <= 0)
+            auto sightLine = glm::normalize(shooter.vertices[0] - destination.vertices[0]);
+            if (glm::dot(sightLine, scene.faces[destination.faceId].normal) <= 0 || glm::dot(-sightLine, scene.faces[shooter.faceId].normal) <= 0)
                 continue;
 
             auto F = calculateFormFactor(shooter, destination, scene, rng);
@@ -165,69 +115,82 @@ __global__ void gather(int2 lightmapSize, float3* lightmap, float3* residues, fl
     }
 }
 
-__global__ void initTextures(int2 lightmapSize, float3* lightmap, float3* residues, float3* nextResidues, const Scene scene) {
-    int2 texelST = make_int2(blockIdx.x * blockDim.x + threadIdx.x, blockIdx.y * blockDim.y + threadIdx.y);
+__global__ void initTextures(uvec2 lightmapSize, vec3* lightmap, vec3* residues, vec3* nextResidues, const Scene scene) {
+    auto texelST = uvec2(blockIdx.x * blockDim.x + threadIdx.x, blockIdx.y * blockDim.y + threadIdx.y);
     if (texelST.x >= lightmapSize.x || texelST.y >= lightmapSize.y)
         return;
 
     auto patchIdx = texelST.y * lightmapSize.x + texelST.x;
     auto& patch = scene.patches[patchIdx];
 
-    float3 residue;
+    vec3 residue;
     if (patch.faceId != NULL_ID)
         residue = scene.materials[scene.faces[patch.faceId].materialId].emission;
     else
-        residue = make_float3(0, 0, 0);
+        residue = vec3(0);
 
     lightmap[patchIdx] = residue;
     residues[patchIdx] = residue;
-    nextResidues[patchIdx] = make_float3(0, 0, 0);
+    nextResidues[patchIdx] = vec3(0);
 }
 
-__host__ extern "C" float3* solveRadiosityCUDA(uint32_t bounces, int2 lightmapSize, Patch* patches, size_t sceneFaceCount, Face* sceneFaces, size_t materialCount, Material* materials) {
-    Face* sceneFacesDevice;
-    cudaMalloc(&sceneFacesDevice, sceneFaceCount * sizeof(Face));
-    cudaMemcpyAsync(sceneFacesDevice, sceneFaces, sceneFaceCount * sizeof(Face), cudaMemcpyHostToDevice);
+extern "C" vec3* solveRadiosityCUDA(uint32_t bounces, uvec2 lightmapSize, const Scene& sceneHost) {
+    Scene sceneDevice = sceneHost;
 
-    Patch* patchesDevice;
-    cudaMalloc(&patchesDevice, lightmapSize.x * lightmapSize.y * sizeof(Patch));
-    cudaMemcpyAsync(patchesDevice, patches, lightmapSize.x * lightmapSize.y * sizeof(Patch), cudaMemcpyHostToDevice);
+    // upload scene data to the device
+    cudaMalloc(&sceneDevice.faces, sceneHost.faceCount * sizeof(Face));
+    cudaMemcpy(sceneDevice.faces, sceneHost.faces, sceneHost.faceCount * sizeof(Face), cudaMemcpyHostToDevice);
 
-    Material* materialsDevice;
-    cudaMalloc(&materialsDevice, materialCount * sizeof(Material));
-    cudaMemcpyAsync(materialsDevice, materials, materialCount * sizeof(Material), cudaMemcpyHostToDevice);
+    cudaMalloc(&sceneDevice.patches, lightmapSize.x * lightmapSize.y * sizeof(Patch));
+    cudaMemcpy(sceneDevice.patches, sceneHost.patches, lightmapSize.x * lightmapSize.y * sizeof(Patch), cudaMemcpyHostToDevice);
 
-    float3* nextResiduesDevice;
-    cudaMalloc(&nextResiduesDevice, lightmapSize.x * lightmapSize.y * sizeof(float3));
+    cudaMalloc(&sceneDevice.materials, sceneHost.materialCount * sizeof(Material));
+    cudaMemcpy(sceneDevice.materials, sceneHost.materials, sceneHost.materialCount * sizeof(Material), cudaMemcpyHostToDevice);
 
-    float3* lightmapDevice;
-    cudaMalloc(&lightmapDevice, lightmapSize.x * lightmapSize.y * sizeof(float3));
+    cudaMalloc(&sceneDevice.bvh.nodes, sceneHost.bvh.nodeCount * sizeof(BVH::Node));
+    cudaMemcpy(sceneDevice.bvh.nodes, sceneHost.bvh.nodes, sceneHost.bvh.nodeCount * sizeof(BVH::Node), cudaMemcpyHostToDevice);
 
-    float3* residuesDevice;
-    cudaMalloc(&residuesDevice, lightmapSize.x * lightmapSize.y * sizeof(float3));
+    // allocate work buffers
+    vec3* nextResiduesDevice;
+    cudaMalloc(&nextResiduesDevice, lightmapSize.x * lightmapSize.y * sizeof(vec3));
+
+    vec3* lightmapDevice;
+    cudaMalloc(&lightmapDevice, lightmapSize.x * lightmapSize.y * sizeof(vec3));
+
+    vec3* residuesDevice;
+    cudaMalloc(&residuesDevice, lightmapSize.x * lightmapSize.y * sizeof(vec3));
+
+    checkCUDAError(cudaPeekAtLastError());
+    checkCUDAError(cudaDeviceSynchronize());
 
     dim3 blockSize(16, 16);  // TODO optimize for SM occupancy
     dim3 blocks(ceil(lightmapSize.x / static_cast<double>(blockSize.x)), ceil(lightmapSize.y / static_cast<double>(blockSize.y)));
 
-    Scene scene{patchesDevice, sceneFacesDevice, static_cast<uint32_t>(sceneFaceCount), materialsDevice};
+    // dispatch a kernel to initialize texture buffers
+    initTextures<<<blocks, blockSize>>>(lightmapSize, lightmapDevice, residuesDevice, nextResiduesDevice, sceneDevice);
+    checkCUDAError(cudaPeekAtLastError());
+    checkCUDAError(cudaDeviceSynchronize());
 
-    initTextures<<<blocks, blockSize>>>(lightmapSize, lightmapDevice, residuesDevice, nextResiduesDevice, scene);
-
+    // gather
     for (size_t bounce = 0; bounce < bounces; bounce++) {
         uint32_t rngSeed = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-        gather<<<blocks, blockSize>>>(lightmapSize, lightmapDevice, residuesDevice, nextResiduesDevice, scene, rngSeed);
+        gather<<<blocks, blockSize>>>(lightmapSize, lightmapDevice, residuesDevice, nextResiduesDevice, sceneDevice, rngSeed);
 
         std::swap(residuesDevice, nextResiduesDevice);
-        cudaMemsetAsync(nextResiduesDevice, 0, lightmapSize.x * lightmapSize.y * sizeof(float3));
+        cudaMemsetAsync(nextResiduesDevice, 0, lightmapSize.x * lightmapSize.y * sizeof(vec3));
     }
-    cudaDeviceSynchronize();
+    checkCUDAError(cudaPeekAtLastError());
+    checkCUDAError(cudaDeviceSynchronize());
 
-    float3* lightmapHost = new float3[lightmapSize.x * lightmapSize.y];
-    cudaMemcpy(lightmapHost, lightmapDevice, lightmapSize.x * lightmapSize.y * sizeof(float3), cudaMemcpyDeviceToHost);
+    // copy lightmap back
+    vec3* lightmapHost = new vec3[lightmapSize.x * lightmapSize.y];
+    cudaMemcpy(lightmapHost, lightmapDevice, lightmapSize.x * lightmapSize.y * sizeof(vec3), cudaMemcpyDeviceToHost);
 
-    cudaFree(patchesDevice);
-    cudaFree(sceneFacesDevice);
-    cudaFree(materialsDevice);
+    // free everything on the device
+    cudaFree(sceneDevice.patches);
+    cudaFree(sceneDevice.faces);
+    cudaFree(sceneDevice.materials);
+    cudaFree(sceneDevice.bvh.nodes);
     cudaFree(lightmapDevice);
     cudaFree(residuesDevice);
     cudaFree(nextResiduesDevice);

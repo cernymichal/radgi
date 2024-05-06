@@ -42,6 +42,9 @@
     <ClCompile Include="src\GISolver\CUDASolver\CUDASolver.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\BVH.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\pch.h">
@@ -83,7 +86,8 @@
     <ClInclude Include="src\GISolver\CUDASolver\CUDAStructs.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\GISolver\CUDASolver\helper_math.h">
+    <ClInclude Include="src\GISolver\CUDASolver\utils.cuh" />
+    <ClInclude Include="src\BVH.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

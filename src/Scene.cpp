@@ -1,5 +1,12 @@
 #include "Scene.h"
 
+void Scene::initialize(const uvec2& lightmapSize) {
+    m_lightmapSize = lightmapSize;
+
+    m_bvh.build();
+    createPatches();
+}
+
 static float triangleArea(const vec2& a, const vec2& b, const vec2& c) {
     vec2 edge0 = b - a;
     vec2 edge1 = c - a;
@@ -86,8 +93,7 @@ std::tuple<std::array<vec2, 4>, uint8_t> faceTexelIntersection(const Face& face,
     return {intersectionVertices, intersectionVertexCount};
 }
 
-void Scene::initialize(const uvec2& lightmapSize) {
-    m_lightmapSize = lightmapSize;
+void Scene::createPatches() {
     m_patches = Texture<Patch>(m_lightmapSize);
 
     auto maxResiduePatch = uvec2(0, 0);

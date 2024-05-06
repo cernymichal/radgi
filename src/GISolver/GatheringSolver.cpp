@@ -16,7 +16,7 @@ void GatheringSolver::initialize(const Ref<const Scene>& scene) {
         for (patchIdx.x = 0; patchIdx.x < m_lightmapSize.x; patchIdx.x++) {
             auto& patch = m_scene->patches()[patchIdx];
             if (patch.face == nullptr)
-				continue;
+                continue;
 
             auto residue = patch.face->material->emission;
             m_residues[patchIdx] = residue;
@@ -63,7 +63,7 @@ float GatheringSolver::gather(uvec2 destinationIdx) {
                 continue;
 
             // check if the patches are facing each other
-            auto sightLine = glm::normalize(shooter.center - destination.center);
+            auto sightLine = glm::normalize(shooter.vertices[0] - destination.vertices[0]);
             if (glm::dot(sightLine, destination.face->normal) <= 0 || glm::dot(-sightLine, shooter.face->normal) <= 0)
                 continue;
 

@@ -32,7 +32,7 @@ Texture<vec3> ProgressiveSolver::solve() {
         if (residue <= m_residueThreshold)
             break;
 
-        if (i % 100 == 0)
+        //if (i % 100 == 0)
             LOG(std::format("{}: residue={:0.4f}", i, residue));
     }
 
@@ -71,7 +71,7 @@ float ProgressiveSolver::shoot(uvec2 sourceIdx) {
                 continue;
 
             // check if the patches are facing each other
-            auto sightLine = glm::normalize(receiver.center - source.center);
+            auto sightLine = glm::normalize(receiver.vertices[0] - source.vertices[0]);
             if (glm::dot(sightLine, source.face->normal) <= 0 || glm::dot(-sightLine, receiver.face->normal) <= 0)
                 continue;
 

@@ -59,7 +59,7 @@ std::vector<Face> loadMesh(const std::filesystem::path& filePath) {
                 tinyobj::real_t nz = attrib.normals[3 * size_t(idx.normal_index) + 2];
                 face.normal = vec3(nx, ny, nz);
 
-                assert(idx.normal_index >= 0);
+                assert(idx.texcoord_index >= 0);
                 tinyobj::real_t tx = attrib.texcoords[2 * size_t(idx.texcoord_index) + 0];
                 tinyobj::real_t ty = attrib.texcoords[2 * size_t(idx.texcoord_index) + 1];
                 face.lightmapUVs[v] = vec2(tx, ty);
