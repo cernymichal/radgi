@@ -20,4 +20,4 @@ protected:
     IGISolver() = default;
 };
 
-float calculateFormFactor(const Patch& patchA, const Patch& patchB, const Scene& scene);
+f32 calculateFormFactor(const Patch& patchA, const Patch& patchB, const Scene& scene);

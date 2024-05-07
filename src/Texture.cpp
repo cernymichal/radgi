@@ -9,8 +9,8 @@
 #include <tinyexr.h>
 
 template class Texture<bool>;
-template class Texture<float>;
-template class Texture<uint64_t>;
+template class Texture<f32>;
+template class Texture<u64>;
 template class Texture<vec2>;
 template class Texture<vec3>;
 template class Texture<vec4>;
@@ -22,7 +22,7 @@ Texture<T>::Texture(const std::filesystem::path& filePath, bool flipVertically) 
     LOG("Loading texture " << pathString);
 
     int channelsToLoad = 3;
-    if constexpr (std::is_same_v<T, float>)
+    if constexpr (std::is_same_v<T, f32>)
         channelsToLoad = 1;
     else if constexpr (std::is_same_v<T, vec2>)
         channelsToLoad = 2;
@@ -57,7 +57,7 @@ Texture<T>::Texture(const std::filesystem::path& filePath, bool flipVertically) 
         throw std::runtime_error("Invalid EXR file");
     }
 
-    // Read HALF channel as FLOAT.
+    // Read HALF channel as f32.
     for (int i = 0; i < header.num_channels; i++) {
         if (header.pixel_types[i] == TINYEXR_PIXELTYPE_HALF)
             header.requested_pixel_types[i] = TINYEXR_PIXELTYPE_FLOAT;
@@ -78,14 +78,14 @@ Texture<T>::Texture(const std::filesystem::path& filePath, bool flipVertically) 
     m_data = new T[m_size.x * m_size.y];
 
     // Load the image data to a single array, flipping it vertically if necessary
-    float* dataFloat = reinterpret_cast<float*>(m_data);
+    f32* dataf32 = reinterpret_cast<f32*>(m_data);
     for (int channel = 0; channel < channelsToLoad; channel++) {
         auto idx = uvec2(0);
         for (idx.y = 0; idx.y < m_size.y; idx.y++) {
             for (idx.x = 0; idx.x < m_size.x; idx.x++) {
                 auto i = idx.y * m_size.x + idx.x;
                 auto flippedI = (flipVertically ? m_size.y - 1 - idx.y : idx.y) * m_size.x + idx.x;
-                dataFloat[flippedI * channelsToLoad + channel] = reinterpret_cast<float*>(image.images[channel])[i];
+                dataf32[flippedI * channelsToLoad + channel] = reinterpret_cast<f32*>(image.images[channel])[i];
             }
         }
     }
@@ -96,7 +96,7 @@ Texture<T>::Texture(const std::filesystem::path& filePath, bool flipVertically) 
         for (idx.y = 0; idx.y < m_size.y; idx.y++) {
             for (idx.x = 0; idx.x < m_size.x; idx.x++) {
                 auto i = (idx.y * m_size.x + idx.x) * channelsToLoad;
-                std::swap(dataFloat[i], dataFloat[i + 2]);
+                std::swap(dataf32[i], dataf32[i + 2]);
             }
         }
     }
@@ -111,7 +111,7 @@ void Texture<T>::save(const std::filesystem::path& filePath, bool flipVertically
     LOG("Saving texture " << pathString);
 
     int channelsToSave = 1;
-    if constexpr (std::is_same_v<T, float>)
+    if constexpr (std::is_same_v<T, f32>)
         channelsToSave = 1;
     else if constexpr (std::is_same_v<T, vec2>)
         channelsToSave = 2;
@@ -128,18 +128,18 @@ void Texture<T>::save(const std::filesystem::path& filePath, bool flipVertically
     EXRImage image;
     InitEXRImage(&image);
 
-    std::vector<float*> images;
+    std::vector<f32*> images;
     for (int i = 0; i < channelsToSave; i++)
-        images.push_back(new float[m_size.x * m_size.y]);
+        images.push_back(new f32[m_size.x * m_size.y]);
 
-    float* const dataFloat = reinterpret_cast<float* const>(m_data);
+    f32* const dataf32 = reinterpret_cast<f32* const>(m_data);
     auto idx = uvec2(0);
     for (idx.y = 0; idx.y < m_size.y; idx.y++) {
         for (idx.x = 0; idx.x < m_size.x; idx.x++) {
             auto i = idx.y * m_size.x + idx.x;
             auto flippedI = (flipVertically ? m_size.y - 1 - idx.y : idx.y) * m_size.x + idx.x;
             for (int channel = 0; channel < channelsToSave; channel++)
-                images[channel][flippedI] = dataFloat[i * channelsToSave + channel];
+                images[channel][flippedI] = dataf32[i * channelsToSave + channel];
         }
     }
 
@@ -147,7 +147,7 @@ void Texture<T>::save(const std::filesystem::path& filePath, bool flipVertically
     if (channelsToSave >= 3)
         std::swap(images[0], images[2]);
 
-    image.images = reinterpret_cast<unsigned char**>(images.data());
+    image.images = reinterpret_cast<u8**>(images.data());
     image.width = m_size.x;
     image.height = m_size.y;
     image.num_channels = channelsToSave;

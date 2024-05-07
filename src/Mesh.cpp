@@ -79,7 +79,7 @@ void saveMesh(const std::filesystem::path& filePath, const std::vector<Face>& fa
     auto patchIdx = uvec2(0, 0);
     auto vertexI = 1;
     for (auto& face : faces) {
-        for (uint32_t i = 0; i < 3; i++) {
+        for (u32 i = 0; i < 3; i++) {
             auto vertex = face.vertices[i];
             file << std::format("v {} {} {}\n", vertex.x, vertex.y, vertex.z);
             vertexI++;

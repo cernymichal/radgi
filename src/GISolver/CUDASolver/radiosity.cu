@@ -20,11 +20,11 @@ __device__ vec3 randomPointOnPatch(const Patch& patch, RNG& rng) {
     return patch.vertices[0] + rng() * edge0 + rng() * edge1;  // TODO this is wrong
 }
 
-__device__ float calculateFormFactor(const Patch& patchA, const Patch& patchB, const Scene& scene, RNG& rng) {
-    float F = 0;
+__device__ f32 calculateFormFactor(const Patch& patchA, const Patch& patchB, const Scene& scene, RNG& rng) {
+    f32 F = 0;
 
     constexpr auto rayCount = 8;  // TODO make this a parameter
-    for (uint32_t i = 0; i < rayCount; i++) {
+    for (u32 i = 0; i < rayCount; i++) {
         auto rayOrigin = randomPointOnPatch(patchA, rng);
         auto rayTarget = randomPointOnPatch(patchB, rng);
 
@@ -37,12 +37,12 @@ __device__ float calculateFormFactor(const Patch& patchA, const Patch& patchB, c
 
 #define USE_BVH
 #ifdef USE_BVH
-        Interval<float> tInterval = {0, targetDistance - 0.01f};  // leeway for shared edges passing through the lightmap
-        uint32_t excludeFaces[] = {patchA.faceId, patchB.faceId};
+        Interval<f32> tInterval = {0, targetDistance - 0.01f};  // leeway for shared edges passing through the lightmap
+        u32 excludeFaces[] = {patchA.faceId, patchB.faceId};
         bool hit = intersectsBVH(scene, rayOrigin, rayDirection, tInterval, excludeFaces);
 #else
         bool hit = false;
-        for (uint32_t i = 0; i < scene.faceCount; i++) {
+        for (u32 i = 0; i < scene.faceCount; i++) {
             auto& face = scene.faces[i];
             if (glm::dot(-rayDirection, face.normal) <= 0)
                 continue;
@@ -67,7 +67,7 @@ __device__ float calculateFormFactor(const Patch& patchA, const Patch& patchB, c
         auto ray = rayTarget - rayOrigin;
         auto r2 = glm::dot(ray, ray);
         auto cosines = glm::dot(rayDirection, scene.faces[patchA.faceId].normal) * glm::dot(-rayDirection, scene.faces[patchB.faceId].normal);
-        float deltaF = cosines * patchB.area / (PI * r2);  // + patchB.area / rayCount);
+        f32 deltaF = cosines * patchB.area / (PI * r2);  // + patchB.area / rayCount);
 
         if (deltaF > 0)
             F += deltaF;
@@ -76,7 +76,7 @@ __device__ float calculateFormFactor(const Patch& patchA, const Patch& patchB, c
     return F / rayCount;
 }
 
-__global__ void gather(uvec2 lightmapSize, vec3* lightmap, vec3* residues, vec3* nextResidues, const Scene scene, uint32_t rngSeed) {
+__global__ void gather(uvec2 lightmapSize, vec3* lightmap, vec3* residues, vec3* nextResidues, const Scene scene, u32 rngSeed) {
     uvec2 destinationST = uvec2(blockIdx.x * blockDim.x + threadIdx.x, blockIdx.y * blockDim.y + threadIdx.y);
     if (destinationST.x >= lightmapSize.x || destinationST.y >= lightmapSize.y)
         return;
@@ -134,7 +134,7 @@ __global__ void initTextures(uvec2 lightmapSize, vec3* lightmap, vec3* residues,
     nextResidues[patchIdx] = vec3(0);
 }
 
-extern "C" vec3* solveRadiosityCUDA(uint32_t bounces, uvec2 lightmapSize, const Scene& sceneHost) {
+extern "C" vec3* solveRadiosityCUDA(u32 bounces, uvec2 lightmapSize, const Scene& sceneHost) {
     Scene sceneDevice = sceneHost;
 
     // upload scene data to the device
@@ -164,7 +164,7 @@ extern "C" vec3* solveRadiosityCUDA(uint32_t bounces, uvec2 lightmapSize, const 
     checkCUDAError(cudaDeviceSynchronize());
 
     dim3 blockSize(16, 16);  // TODO optimize for SM occupancy
-    dim3 blocks(ceil(lightmapSize.x / static_cast<double>(blockSize.x)), ceil(lightmapSize.y / static_cast<double>(blockSize.y)));
+    dim3 blocks(ceil(lightmapSize.x / static_cast<f64>(blockSize.x)), ceil(lightmapSize.y / static_cast<f64>(blockSize.y)));
 
     // dispatch a kernel to initialize texture buffers
     initTextures<<<blocks, blockSize>>>(lightmapSize, lightmapDevice, residuesDevice, nextResiduesDevice, sceneDevice);
@@ -173,7 +173,7 @@ extern "C" vec3* solveRadiosityCUDA(uint32_t bounces, uvec2 lightmapSize, const 
 
     // gather
     for (size_t bounce = 0; bounce < bounces; bounce++) {
-        uint32_t rngSeed = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        u32 rngSeed = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
         gather<<<blocks, blockSize>>>(lightmapSize, lightmapDevice, residuesDevice, nextResiduesDevice, sceneDevice, rngSeed);
 
         std::swap(residuesDevice, nextResiduesDevice);

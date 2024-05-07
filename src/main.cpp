@@ -45,20 +45,20 @@ int main(int argc, char* argv[]) {
     std::string outputFile;
     cmdl({"-o", "--output"}, "output.exr") >> outputFile;
 
-    uint32_t resolution;
+    u32 resolution;
     cmdl({"-r", "--resolution"}, 128) >> resolution;
 
-    float threshold;
+    f32 threshold;
     cmdl({"-t", "--threshold"}, 0.1f) >> threshold;
     bool useShooting = true;
 
     bool useCUDA = cmdl[{"-g", "--gpu"}];
 
-    uint32_t bounces = 4;
+    u32 bounces = 4;
     if (cmdl({"-b", "--bounces"}) >> bounces || useCUDA)
         useShooting = false;
 
-    uint32_t dilationRadius;
+    u32 dilationRadius;
     cmdl({"-d", "--dilation"}, 2) >> dilationRadius;
 
     auto lightmapSize = uvec2(resolution);

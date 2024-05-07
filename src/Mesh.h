@@ -17,7 +17,7 @@ struct Face {
     }
 
     AABB calculateAABB() const {
-        AABB aabb = {vec3(std::numeric_limits<float>::max()), vec3(std::numeric_limits<float>::lowest())};
+        AABB aabb = {vec3(std::numeric_limits<f32>::max()), vec3(std::numeric_limits<f32>::lowest())};
         for (const vec3& vertex : vertices) {
             aabb.min = min(aabb.min, vertex);
             aabb.max = max(aabb.max, vertex);

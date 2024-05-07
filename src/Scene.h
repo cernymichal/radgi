@@ -6,13 +6,13 @@
 
 struct Patch {
     std::array<vec3, 4> vertices;
-    uint8_t vertexCount = 0;
-    float area = 0;
+    u8 vertexCount = 0;
+    f32 area = 0;
     Face* face = nullptr;
 
     Patch() = default;
 
-    Patch(uint8_t vertexCount, const std::array<vec3, 4>& vertices, Face* face) : vertices(vertices), vertexCount(vertexCount), face(face) {
+    Patch(u8 vertexCount, const std::array<vec3, 4>& vertices, Face* face) : vertices(vertices), vertexCount(vertexCount), face(face) {
         // TODO - this is not correct for general quads
         area = glm::length(glm::cross(vertices[1] - vertices[0], vertices[2] - vertices[1]));
         if (vertexCount == 3)
@@ -60,7 +60,7 @@ public:
 
     std::vector<Face> createPatchGeometry() const;
 
-    void dilateLightmap(Texture<vec3>& lightmap, uint32_t radius = 2);  // TODO move out of here and make const
+    void dilateLightmap(Texture<vec3>& lightmap, u32 radius = 2);  // TODO move out of here and make const
 
 private:
     std::vector<Face> m_faces;

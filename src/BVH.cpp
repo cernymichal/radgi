@@ -9,13 +9,13 @@ void BVH::build() {
     buildRecursive(0, m_faces.size(), 0);
 }
 
-bool BVH::intersects(const vec3& rayOrigin, const vec3& rayDirection, const Interval<float>& tInterval, const std::function<bool(float, const Face&)>& hitPredicate) const {
+bool BVH::intersects(const vec3& rayOrigin, const vec3& rayDirection, const Interval<f32>& tInterval, const std::function<bool(f32, const Face&)>& hitPredicate) const {
     return intersectsRecursive(rayOrigin, rayDirection, 1.0f / rayDirection, 0, tInterval, hitPredicate);
 }
 
-void BVH::buildRecursive(uint32_t startFace, uint32_t endFace, uint32_t node) {
+void BVH::buildRecursive(u32 startFace, u32 endFace, u32 node) {
     if (endFace - startFace == 0) {
-        m_nodes[node].face = uint32_t(-1);
+        m_nodes[node].face = u32(-1);
         m_nodes[node].aabb = AABB::empty();
         return;
     }
@@ -26,12 +26,12 @@ void BVH::buildRecursive(uint32_t startFace, uint32_t endFace, uint32_t node) {
         return;
     }
 
-    auto axis = random<uint32_t>(0, 2);
+    auto axis = random<u32>(0, 2);
     std::sort(m_faces.begin() + startFace, m_faces.begin() + endFace, [axis](const Face& a, const Face& b) {
         return a.aabb.min[axis] < b.aabb.min[axis];
     });
 
-    uint32_t median = (startFace + endFace) / 2;
+    u32 median = (startFace + endFace) / 2;
     auto leftChild = 2 * node + 1;
     auto rightChild = 2 * node + 2;
     buildRecursive(startFace, median, leftChild);
@@ -40,11 +40,11 @@ void BVH::buildRecursive(uint32_t startFace, uint32_t endFace, uint32_t node) {
     m_nodes[node].aabb = m_nodes[leftChild].aabb.boundingUnion(m_nodes[rightChild].aabb);
 }
 
-bool BVH::intersectsRecursive(const vec3& rayOrigin, const vec3& rayDirection, const vec3& rayDirectionInv, uint32_t node, const Interval<float>& tInterval, const std::function<bool(float, const Face&)>& hitPredicate) const {
+bool BVH::intersectsRecursive(const vec3& rayOrigin, const vec3& rayDirection, const vec3& rayDirectionInv, u32 node, const Interval<f32>& tInterval, const std::function<bool(f32, const Face&)>& hitPredicate) const {
     if (node >= m_nodes.size() / 2) {
         // Leaf node
 
-        if (m_nodes[node].face == uint32_t(-1))
+        if (m_nodes[node].face == u32(-1))
             return false;
 
         const auto& face = m_faces[m_nodes[node].face];

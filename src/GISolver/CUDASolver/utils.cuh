@@ -14,27 +14,27 @@ inline void logCUDAError(cudaError_t code, const char* file, int line) {
 }
 
 struct RNG {
-    uint32_t state;
+    u32 state;
 
-    __device__ explicit constexpr RNG(uint32_t seed) : state(seed) {}
+    __device__ explicit constexpr RNG(u32 seed) : state(seed) {}
 
-    __device__ constexpr inline float operator()(float min = 0.0f, float max = 1.0f) {
+    __device__ constexpr inline f32 operator()(f32 min = 0.0f, f32 max = 1.0f) {
         // https://www.reedbeta.com/blog/hash-functions-for-gpu-rendering/
         // PCG PRNG
         state = state * 747796405u + 2891336453u;
-        uint32_t word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+        u32 word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
         auto randomValue = (word >> 22u) ^ word;
 
-        // map to a float in [min, max]
-        return min + (max - min) * static_cast<float>(randomValue) / static_cast<float>(uint32_t(-1));
+        // map to a f32 in [min, max]
+        return min + (max - min) * static_cast<f32>(randomValue) / static_cast<f32>(u32(-1));
     }
 };
 
-__device__ bool intersectsBVH(const Scene& scene, const vec3& rayOrigin, const vec3& rayDirection, const Interval<float>& tInterval, const uint32_t excludedFaces[2]) {
+__device__ bool intersectsBVH(const Scene& scene, const vec3& rayOrigin, const vec3& rayDirection, const Interval<f32>& tInterval, const u32 excludedFaces[2]) {
     auto rayDirectionInv = 1.0f / rayDirection;
 
-    uint32_t stack[64];
-    int32_t stackSize = 0;
+    u32 stack[64];
+    i32 stackSize = 0;
     stack[stackSize++] = 0;
 
     while (stackSize > 0) {
@@ -44,7 +44,7 @@ __device__ bool intersectsBVH(const Scene& scene, const vec3& rayOrigin, const v
             // Leaf node
 
             auto faceId = scene.bvh.nodes[node].face;
-            if (faceId == uint32_t(-1))
+            if (faceId == u32(-1))
                 continue;
 
             const auto& face = scene.faces[faceId];

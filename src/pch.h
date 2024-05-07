@@ -33,3 +33,4 @@
 #include "Utils/Math.h"
 #include "Utils/Ptr.h"
 #include "Utils/Random.h"
+#include "Utils/Scalars.h"

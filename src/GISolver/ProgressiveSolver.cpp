@@ -27,7 +27,7 @@ void ProgressiveSolver::initialize(const Ref<const Scene>& scene) {
 }
 
 Texture<vec3> ProgressiveSolver::solve() {
-    for (uint32_t i = 0;; i++) {
+    for (u32 i = 0;; i++) {
         auto residue = shoot(m_maxResiduePatchIdx);
         if (residue <= m_residueThreshold)
             break;
@@ -39,7 +39,7 @@ Texture<vec3> ProgressiveSolver::solve() {
     return std::move(m_lightmap);
 }
 
-float ProgressiveSolver::shoot(uvec2 sourceIdx) {
+f32 ProgressiveSolver::shoot(uvec2 sourceIdx) {
     auto& source = m_scene->patches()[sourceIdx];
     auto sourceResidue = m_residues[sourceIdx];
     auto shotRad = glm::length(sourceResidue);
@@ -48,9 +48,9 @@ float ProgressiveSolver::shoot(uvec2 sourceIdx) {
         return 0;  // nothing to solve
 
     auto maxResiduePatch = uvec2(0, 0);
-    float maxResidue2 = 0;  // squared magnitude
+    f32 maxResidue2 = 0;  // squared magnitude
 
-    float reflectedRad = 0;
+    f32 reflectedRad = 0;
 
     // shoot to other patches
     auto receiverIdx = uvec2(0, 0);

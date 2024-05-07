@@ -7,7 +7,7 @@ void Scene::initialize(const uvec2& lightmapSize) {
     createPatches();
 }
 
-static float triangleArea(const vec2& a, const vec2& b, const vec2& c) {
+static f32 triangleArea(const vec2& a, const vec2& b, const vec2& c) {
     vec2 edge0 = b - a;
     vec2 edge1 = c - a;
     return glm::cross(edge0, edge1) / 2;
@@ -22,12 +22,12 @@ static vec3 barycentricCoordinates(const std::array<vec2, 3>& vertices, const ve
     return barycentric / area;
 }
 
-std::tuple<std::array<vec2, 4>, uint8_t> faceTexelIntersection(const Face& face, const std::array<vec2, 4>& texelVertices) {
+std::tuple<std::array<vec2, 4>, u8> faceTexelIntersection(const Face& face, const std::array<vec2, 4>& texelVertices) {
     std::array<vec2, 4> intersectionVertices;
-    uint8_t intersectionVertexCount = 0;
+    u8 intersectionVertexCount = 0;
 
     // add texel vertices if they are inside the face
-    for (uint32_t i = 0; i < 4; i++) {
+    for (u32 i = 0; i < 4; i++) {
         vec3 barycentric = barycentricCoordinates(face.lightmapUVs, texelVertices[i]);
         if (glm::all(barycentric >= vec3(0)))
             intersectionVertices[intersectionVertexCount++] = texelVertices[i];
@@ -37,11 +37,11 @@ std::tuple<std::array<vec2, 4>, uint8_t> faceTexelIntersection(const Face& face,
         return {texelVertices, 4};
 
     // add edge intersections
-    for (uint32_t i = 0; i < 4; i++) {
+    for (u32 i = 0; i < 4; i++) {
         auto texelVertex = texelVertices[i];
         auto texelEdge = texelVertices[(i + 1) % 4] - texelVertex;
 
-        for (uint32_t j = 0; j < 3; j++) {
+        for (u32 j = 0; j < 3; j++) {
             auto faceVertex = face.lightmapUVs[j];
             auto faceEdge = face.lightmapUVs[(j + 1) % 3] - faceVertex;
 
@@ -58,7 +58,7 @@ std::tuple<std::array<vec2, 4>, uint8_t> faceTexelIntersection(const Face& face,
     }
 
     // add face vertices inside the texel
-    for (uint32_t i = 0; i < 3; i++) {
+    for (u32 i = 0; i < 3; i++) {
         if (glm::all(face.lightmapUVs[i] > texelVertices[0]) && glm::all(face.lightmapUVs[i] < texelVertices[2])) {
             // polygons with more than 4 vertices would be too complex to handle
             if (intersectionVertexCount == 4)
@@ -73,12 +73,12 @@ std::tuple<std::array<vec2, 4>, uint8_t> faceTexelIntersection(const Face& face,
 
     // sort the vertices to CCW order
     auto center = vec2(0);
-    for (uint32_t i = 0; i < intersectionVertexCount; i++)
+    for (u32 i = 0; i < intersectionVertexCount; i++)
         center += intersectionVertices[i];
-    center /= static_cast<float>(intersectionVertexCount);
-    for (uint32_t i = 0; i < intersectionVertexCount; i++) {  // bubble for 4 vertices here is ~2.5x faster than std::sort
+    center /= static_cast<f32>(intersectionVertexCount);
+    for (u32 i = 0; i < intersectionVertexCount; i++) {  // bubble for 4 vertices here is ~2.5x faster than std::sort
         bool swapped = false;
-        for (uint32_t j = 0; j < intersectionVertexCount - i - 1; j++) {
+        for (u32 j = 0; j < intersectionVertexCount - i - 1; j++) {
             auto& a = intersectionVertices[j];
             auto& b = intersectionVertices[j + 1];
             if (atan2(a.x - center.x, a.y - center.y) > atan2(b.x - center.x, b.y - center.y)) {
@@ -97,7 +97,7 @@ void Scene::createPatches() {
     m_patches = Texture<Patch>(m_lightmapSize);
 
     auto maxResiduePatch = uvec2(0, 0);
-    float maxResidue2 = 0;  // squared magnitude
+    f32 maxResidue2 = 0;  // squared magnitude
 
     // rasterize the scene faces into the lightmap
     auto texelSize = 1.0f / vec2(m_patches.size());
@@ -108,8 +108,8 @@ void Scene::createPatches() {
         uvec2 minTexel = uvec2(min / texelSize);
         uvec2 maxTexel = uvec2(max / texelSize);
 
-        for (uint32_t y = minTexel.y; y <= maxTexel.y; y++) {
-            for (uint32_t x = minTexel.x; x <= maxTexel.x; x++) {
+        for (u32 y = minTexel.y; y <= maxTexel.y; y++) {
+            for (u32 x = minTexel.x; x <= maxTexel.x; x++) {
                 std::array<vec2, 4> texelVertices = {
                     vec2(x, y) * texelSize,
                     vec2(x + 1, y) * texelSize,
@@ -130,7 +130,7 @@ void Scene::createPatches() {
 
                 // translate the texel vertices to world space
                 std::array<vec3, 4> patchVerticesWS;
-                for (uint32_t i = 0; i < patchVertexCount; i++) {
+                for (u32 i = 0; i < patchVertexCount; i++) {
                     vec3 barycentric = barycentricCoordinates(face.lightmapUVs, patchVertices[i]);
                     patchVerticesWS[i] = barycentric.x * face.vertices[0] + barycentric.y * face.vertices[1] + barycentric.z * face.vertices[2];
                 }
@@ -143,15 +143,15 @@ void Scene::createPatches() {
 
 std::vector<Face> Scene::createPatchGeometry() const {
     std::vector<Face> geometry;
-    for (uint32_t y = 0; y < m_lightmapSize.y; y++) {
-        for (uint32_t x = 0; x < m_lightmapSize.x; x++) {
+    for (u32 y = 0; y < m_lightmapSize.y; y++) {
+        for (u32 x = 0; x < m_lightmapSize.x; x++) {
             auto& patch = m_patches[uvec2(x, y)];
             if (patch.face == nullptr)
                 continue;
 
             if (patch.vertexCount >= 3) {
                 auto& face = geometry.emplace_back();
-                for (uint32_t i = 0; i < 3; i++)
+                for (u32 i = 0; i < 3; i++)
                     face.vertices[i] = patch.vertices[i];
             }
 
@@ -166,19 +166,19 @@ std::vector<Face> Scene::createPatchGeometry() const {
     return geometry;
 }
 
-void Scene::dilateLightmap(Texture<vec3>& lightmap, uint32_t radius) {
+void Scene::dilateLightmap(Texture<vec3>& lightmap, u32 radius) {
     Texture<bool> dilatedThisStep(m_lightmapSize);
-    for (uint32_t i = 0; i < radius; i++) {
+    for (u32 i = 0; i < radius; i++) {
         dilatedThisStep.clear(false);
-        for (uint32_t y = 0; y < m_lightmapSize.y; y++) {
-            for (uint32_t x = 0; x < m_lightmapSize.x; x++) {
+        for (u32 y = 0; y < m_lightmapSize.y; y++) {
+            for (u32 x = 0; x < m_lightmapSize.x; x++) {
                 auto idx = uvec2(x, y);
 
                 if (m_patches[idx].face != nullptr)
                     continue;
 
-                for (int32_t dy = -1; dy <= 1; dy++) {
-                    for (int32_t dx = -1; dx <= 1; dx++) {
+                for (i32 dy = -1; dy <= 1; dy++) {
+                    for (i32 dx = -1; dx <= 1; dx++) {
                         if (abs(dx) == 1 && abs(dy) == 1)
                             continue;
 

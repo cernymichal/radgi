@@ -2,17 +2,17 @@
 
 #include "CUDAStructs.h"
 
-extern "C" vec3* solveRadiosityCUDA(uint32_t bounces, uvec2 lightmapSize, const CUDAStructs::Scene& sceneHost);
+extern "C" vec3* solveRadiosityCUDA(u32 bounces, uvec2 lightmapSize, const CUDAStructs::Scene& sceneHost);
 
 void CUDASolver::initialize(const Ref<const Scene>& scene) {
     IGISolver::initialize(scene);
 
     m_lightmapSize = {static_cast<int>(scene->lightmapSize().x), static_cast<int>(scene->lightmapSize().y)};
 
-    std::unordered_map<Ref<Material>, uint16_t> materialIndices;
+    std::unordered_map<Ref<Material>, u16> materialIndices;
     m_materials.reserve(m_scene->materials().size());
     for (const auto& material : m_scene->materials()) {
-        materialIndices[material] = static_cast<uint16_t>(m_materials.size());
+        materialIndices[material] = static_cast<u16>(m_materials.size());
 
         auto& cudaMaterial = m_materials.emplace_back();
         cudaMaterial = {
@@ -26,7 +26,7 @@ void CUDASolver::initialize(const Ref<const Scene>& scene) {
         cudaFace = {
             .vertices = face.vertices,
             .normal = face.normal,
-            .materialId = face.material != nullptr ? materialIndices[face.material] : static_cast<uint16_t>(CUDAStructs::NULL_ID)};
+            .materialId = face.material != nullptr ? materialIndices[face.material] : static_cast<u16>(CUDAStructs::NULL_ID)};
     }
 
     m_patches.reserve(m_lightmapSize.x * m_lightmapSize.y);
@@ -40,7 +40,7 @@ void CUDASolver::initialize(const Ref<const Scene>& scene) {
                 .vertices = patch.vertices,
                 .vertexCount = patch.vertexCount,
                 .area = patch.area,
-                .faceId = patch.face != nullptr ? static_cast<uint32_t>(patch.face - m_scene->faces().data()) : CUDAStructs::NULL_ID};
+                .faceId = patch.face != nullptr ? static_cast<u32>(patch.face - m_scene->faces().data()) : CUDAStructs::NULL_ID};
         }
     }
 
@@ -58,12 +58,12 @@ Texture<vec3> CUDASolver::solve() {
     CUDAStructs::Scene sceneHost = {
         .patches = m_patches.data(),
         .faces = m_faces.data(),
-        .faceCount = static_cast<uint32_t>(m_faces.size()),
+        .faceCount = static_cast<u32>(m_faces.size()),
         .materials = m_materials.data(),
-        .materialCount = static_cast<uint32_t>(m_materials.size()),
+        .materialCount = static_cast<u32>(m_materials.size()),
         .bvh = {
             .nodes = m_bvhNodes.data(),
-            .nodeCount = static_cast<uint32_t>(m_bvhNodes.size()),
+            .nodeCount = static_cast<u32>(m_bvhNodes.size()),
         },
     };
 

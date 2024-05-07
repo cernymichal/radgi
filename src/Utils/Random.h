@@ -5,18 +5,19 @@
 #include <thread>
 
 #include "Math.h"
+#include "Scalars.h"
 
 /*
  * @brief Fast pseudo random number generator by Sebastiano Vigna
  */
 struct SplitMix64 {
-    uint64_t state;
+    u64 state;
 
     /*
      * @brief Constructs a new instance.
      * @param seed Initial state.
      */
-    explicit constexpr SplitMix64(uint64_t seed) : state(seed) {}
+    explicit constexpr SplitMix64(u64 seed) : state(seed) {}
 
     /*
      * @brief Constructs a new instance seeded by the current time.
@@ -26,12 +27,12 @@ struct SplitMix64 {
     /*
      * @brief Generates a random uint64 and updates the state.
      */
-    constexpr inline uint64_t operator()() {
+    constexpr inline u64 operator()() {
         // https://prng.di.unimi.it/splitmix64.c
 
         state += 0x9e3779b97f4a7c15Ui64;
 
-        uint64_t z = state;
+        u64 z = state;
         z ^= z >> 30;
         z *= 0xbf58476d1ce4e5b9Ui64;
         z ^= z >> 27;
@@ -41,12 +42,12 @@ struct SplitMix64 {
         return z;
     }
 
-    static inline constexpr uint64_t min() {
+    static inline constexpr u64 min() {
         return 0;
     }
 
-    static inline constexpr uint64_t max() {
-        return uint64_t(-1);
+    static inline constexpr u64 max() {
+        return u64(-1);
     }
 };
 
@@ -56,13 +57,13 @@ struct SplitMix64 {
  * https://prng.di.unimi.it/
  */
 struct Xoshiro256SS {
-    uint64_t state[4];
+    u64 state[4];
 
     /*
      * @brief Constructs a new instance.
      * @param seed 64b seed from which the initial state is generated using splitmix64.
      */
-    explicit constexpr Xoshiro256SS(uint64_t seed) {
+    explicit constexpr Xoshiro256SS(u64 seed) {
         SplitMix64 generator(seed);
 
         state[0] = generator();
@@ -79,12 +80,12 @@ struct Xoshiro256SS {
     /*
      * @brief Generates a random uint64 and updates the state.
      */
-    constexpr inline uint64_t operator()() {
+    constexpr inline u64 operator()() {
         // https://prng.di.unimi.it/xoshiro256starstar.c
 
-        uint64_t result = bitRotateLeft(state[1] * 5, 7) * 9;
+        u64 result = bitRotateLeft(state[1] * 5, 7) * 9;
 
-        uint64_t t = state[1] << 17;
+        u64 t = state[1] << 17;
         state[2] ^= state[0];
         state[3] ^= state[1];
         state[1] ^= state[2];
@@ -95,19 +96,19 @@ struct Xoshiro256SS {
         return result;
     }
 
-    static inline constexpr uint64_t min() {
+    static inline constexpr u64 min() {
         return 0;
     }
 
-    static inline constexpr uint64_t max() {
-        return uint64_t(-1);
+    static inline constexpr u64 max() {
+        return u64(-1);
     }
 
 private:
     /*
      * @return value rotated by k places left.
      */
-    static inline constexpr uint64_t bitRotateLeft(uint64_t value, int k) {
+    static inline constexpr u64 bitRotateLeft(u64 value, i32 k) {
         return (value << k) | (value >> (64 - k));
     }
 };
@@ -162,7 +163,7 @@ inline T randomNormal() {
         return cache.first;
     }
 
-    double u1, u2;
+    f64 u1, u2;
     do {
         u1 = random<T>();
     } while (u1 == 0);
@@ -183,10 +184,10 @@ inline T randomNormal() {
  *
  * @note Uses RANDOM_GENERATOR internally.
  */
-template <int L, typename T = float>
+template <int L, typename T = f32>
 inline glm::vec<L, T> randomVec(const glm::vec<L, T>& min, const glm::vec<L, T>& max) {
     glm::vec<L, T> result;
-    for (int i = 0; i < L; i++)
+    for (i32 i = 0; i < L; i++)
         result[i] = random<T>(min[i], max[i]);
 
     return result;
@@ -197,7 +198,7 @@ inline glm::vec<L, T> randomVec(const glm::vec<L, T>& min, const glm::vec<L, T>&
  *
  * @note Uses RANDOM_GENERATOR internally.
  */
-template <int L, typename T = float>
+template <int L, typename T = f32>
 inline glm::vec<L, T> randomVec() {
     return randomVec<L, T>(glm::vec<L, T>(0), glm::vec<L, T>(1));
 }
@@ -207,7 +208,7 @@ inline glm::vec<L, T> randomVec() {
  *
  * @note Uses RANDOM_GENERATOR internally.
  */
-template <int L, typename T = float>
+template <int L, typename T = f32>
 inline glm::vec<L, T> randomUnitVec() {
     // for vec3 - faster than sampling a gaussian distribution and normalizing - tested with box-muller transform
 

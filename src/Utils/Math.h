@@ -1,5 +1,11 @@
 #pragma once
 
+#include <array>
+#include <ostream>
+#include <utility>
+
+#include "Scalars.h"
+
 #ifdef __CUDACC__
 
 #define GLM_FORCE_CUDA
@@ -23,21 +29,15 @@
 
 #define GLM_ENABLE_EXPERIMENTAL
 
-#include <array>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/quaternion.hpp>
-#include <ostream>
-#include <utility>
 
-MATH_ARRAY<float, 3> toStdArray(const glm::vec3& v) {
-    return {v.x, v.y, v.z};
-}
-
-constexpr double PI = 3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679;
-constexpr double TWO_PI = 6.2831853071795864769252867665590057683943387987502116419498891846156328125724179972560696506842341358;
-constexpr double HALF_PI = 1.5707963267948966192313216916397514420985846996875529104874722961539082031431044993140174126710585339;
+constexpr f64 E = 2.7182818284590452353602874713526624977572470936999595749669676277240766303535475945713821785251664274;
+constexpr f64 HALF_PI = 1.5707963267948966192313216916397514420985846996875529104874722961539082031431044993140174126710585339;
+constexpr f64 PI = 3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679;
+constexpr f64 TWO_PI = 6.2831853071795864769252867665590057683943387987502116419498891846156328125724179972560696506842341358;
 
 using glm::dvec2;
 using glm::dvec3;
@@ -78,7 +78,7 @@ MATH_CONSTEXPR MATH_FUNC_QUALIFIER vec3 reflect(const vec3& v, const vec3& norma
  * @param normal The normal vector, normalized
  * @param refractionRatio The ratio of the incoming to outgoing refractive indices
  */
-MATH_FUNC_QUALIFIER vec3 refract(const vec3& v, const vec3& normal, float refractionRatio) {
+MATH_FUNC_QUALIFIER vec3 refract(const vec3& v, const vec3& normal, f32 refractionRatio) {
     // Snell's law
     auto cosTheta = std::min(glm::dot(-v, normal), 1.0f);
     auto outgoingPerpendicular = refractionRatio * (v + cosTheta * normal);
@@ -99,8 +99,8 @@ MATH_CONSTEXPR MATH_FUNC_QUALIFIER vec2 lineIntersection(const vec2& aOrigin, co
     // X = aOrigin + aDirection * t
     // X = bOrigin + bDirection * u
 
-    float t = glm::cross(bOrigin - aOrigin, bDirection / glm::cross(aDirection, bDirection));
-    float u = glm::cross(aOrigin - bOrigin, aDirection / glm::cross(bDirection, aDirection));
+    f32 t = glm::cross(bOrigin - aOrigin, bDirection / glm::cross(aDirection, bDirection));
+    f32 u = glm::cross(aOrigin - bOrigin, aDirection / glm::cross(bDirection, aDirection));
     return vec2(t, u);
 }
 
@@ -112,7 +112,7 @@ MATH_CONSTEXPR MATH_FUNC_QUALIFIER vec2 lineIntersection(const vec2& aOrigin, co
  *
  * @note back facing triangles are not intersected
  */
-MATH_CONSTEXPR MATH_FUNC_QUALIFIER float rayTriangleIntersection(const vec3& rayOrigin, const vec3& rayDirection, const MATH_ARRAY<vec3, 3>& vertices) {
+MATH_CONSTEXPR MATH_FUNC_QUALIFIER f32 rayTriangleIntersection(const vec3& rayOrigin, const vec3& rayDirection, const MATH_ARRAY<vec3, 3>& vertices) {
     // X = rayOrigin + rayDirection * t
 
     // Möller–Trumbore intersection algorithm
@@ -148,11 +148,11 @@ MATH_CONSTEXPR MATH_FUNC_QUALIFIER float rayTriangleIntersection(const vec3& ray
  * @param cosine The cosine of the angle between the incident ray and the normal
  * @param refractionRatio The ratio of the incoming to outgoing refractive indices
  */
-MATH_FUNC_QUALIFIER float reflectance(float cosine, float refractionRatio) {
+MATH_FUNC_QUALIFIER f32 reflectance(f32 cosine, f32 refractionRatio) {
     // schlick's reflectance approximation
     auto r0 = (1 - refractionRatio) / (1 + refractionRatio);
     r0 *= r0;
-    return r0 + (1 - r0) * static_cast<float>(std::pow((1 - cosine), 5));
+    return r0 + (1 - r0) * static_cast<f32>(std::pow((1 - cosine), 5));
 }
 
 // Comparison operators for vectors
@@ -226,7 +226,7 @@ struct Interval {
     }
 
     MATH_CONSTEXPR MATH_FUNC_QUALIFIER T center() const {
-        if constexpr (std::is_same_v<T, float> || std::is_same_v<T, vec3>)
+        if constexpr (std::is_same_v<T, f32> || std::is_same_v<T, vec3>)
             return (min + max) / 2.0f;
         else
             return (min + max) / 2;
@@ -289,12 +289,12 @@ using AABB = Interval<vec3>;
 
 template <>
 MATH_CONSTEXPR MATH_FUNC_QUALIFIER static Interval<vec3> Interval<vec3>::empty() {
-    return {vec3(std::numeric_limits<float>::max()), vec3(std::numeric_limits<float>::lowest())};
+    return {vec3(std::numeric_limits<f32>::max()), vec3(std::numeric_limits<f32>::lowest())};
 }
 
 template <>
 MATH_CONSTEXPR MATH_FUNC_QUALIFIER static Interval<vec3> Interval<vec3>::universe() {
-    return {vec3(std::numeric_limits<float>::lowest()), vec3(std::numeric_limits<float>::max())};
+    return {vec3(std::numeric_limits<f32>::lowest()), vec3(std::numeric_limits<f32>::max())};
 }
 
 /*
@@ -303,7 +303,7 @@ MATH_CONSTEXPR MATH_FUNC_QUALIFIER static Interval<vec3> Interval<vec3>::univers
  * @param box The AABB to check against
  * @return The tNear and tFar values of the intersection points along the ray, or NANs if there is no intersection
  */
-MATH_CONSTEXPR MATH_FUNC_QUALIFIER std::pair<float, float> rayAABBintersection(const vec3& rayOrigin, const vec3& rayDirectionInv, const AABB& box) {
+MATH_CONSTEXPR MATH_FUNC_QUALIFIER std::pair<f32, f32> rayAABBintersection(const vec3& rayOrigin, const vec3& rayDirectionInv, const AABB& box) {
     // https://tavianator.com/2011/ray_box.html
     // https://gist.github.com/DomNomNom/46bb1ce47f68d255fd5d
 
@@ -311,8 +311,8 @@ MATH_CONSTEXPR MATH_FUNC_QUALIFIER std::pair<float, float> rayAABBintersection(c
     vec3 tMax = (box.max - rayOrigin) * rayDirectionInv;
     vec3 t1 = glm::min(tMin, tMax);
     vec3 t2 = glm::max(tMin, tMax);
-    float tNear = std::max(std::max(t1.x, t1.y), t1.z);
-    float tFar = std::min(std::min(t2.x, t2.y), t2.z);
+    f32 tNear = std::max(std::max(t1.x, t1.y), t1.z);
+    f32 tFar = std::min(std::min(t2.x, t2.y), t2.z);
 
     if (tNear > tFar)
         return {NAN, NAN};

@@ -51,6 +51,7 @@
     <ClInclude Include="src\Utils\Math.h" />
     <ClInclude Include="src\Utils\Ptr.h" />
     <ClInclude Include="src\Utils\Random.h" />
+    <ClInclude Include="src\Utils\Scalars.h" />
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="src\GISolver\CUDASolver\radiosity.cu">

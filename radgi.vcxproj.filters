@@ -90,6 +90,9 @@
     <ClInclude Include="src\BVH.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\Utils\Scalars.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="src\GISolver\CUDASolver\radiosity.cu" />

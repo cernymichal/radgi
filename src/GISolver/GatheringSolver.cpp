@@ -26,9 +26,9 @@ void GatheringSolver::initialize(const Ref<const Scene>& scene) {
 }
 
 Texture<vec3> GatheringSolver::solve() {
-    for (uint32_t i = 0; i < m_bounces; i++) {
+    for (u32 i = 0; i < m_bounces; i++) {
 #pragma omp parallel for
-        for (uint32_t y = 0; y < m_lightmapSize.y; y++) {
+        for (u32 y = 0; y < m_lightmapSize.y; y++) {
             auto destinationIdx = uvec2(0, y);
             for (destinationIdx.x = 0; destinationIdx.x < m_lightmapSize.x; destinationIdx.x++) {
                 gather(destinationIdx);
@@ -45,13 +45,13 @@ Texture<vec3> GatheringSolver::solve() {
     return std::move(m_lightmap);
 }
 
-float GatheringSolver::gather(uvec2 destinationIdx) {
+f32 GatheringSolver::gather(uvec2 destinationIdx) {
     auto& destination = m_scene->patches()[destinationIdx];
 
     if (destination.face == nullptr)
         return 0;  // nothing to solve
 
-    float gatheredRad = 0;
+    f32 gatheredRad = 0;
 
     // shoot to other patches
     auto shooterIdx = uvec2(0, 0);
