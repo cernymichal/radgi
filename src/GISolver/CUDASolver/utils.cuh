@@ -31,7 +31,7 @@ struct RNG {
 };
 
 __device__ bool intersectsBVH(const Scene& scene, const vec3& rayOrigin, const vec3& rayDirection, const Interval<f32>& tInterval, const u32 excludedFaces[2]) {
-    auto rayDirectionInv = 1.0f / rayDirection;
+    vec3 rayDirectionInv = 1.0f / rayDirection;
 
     u32 stack[64];
     i32 stackSize = 0;
@@ -39,14 +39,9 @@ __device__ bool intersectsBVH(const Scene& scene, const vec3& rayOrigin, const v
 
     while (stackSize > 0) {
         auto node = stack[--stackSize];
-        
-        if (node >= scene.bvh.nodeCount / 2) {
-            // Leaf node
+        auto faceId = scene.bvh.nodes[node].face;
 
-            auto faceId = scene.bvh.nodes[node].face;
-            if (faceId == u32(-1))
-                continue;
-
+        if (faceId != u32(-1)) {
             const auto& face = scene.faces[faceId];
 
             if (glm::dot(rayDirection, face.normal) >= 0)
@@ -60,6 +55,9 @@ __device__ bool intersectsBVH(const Scene& scene, const vec3& rayOrigin, const v
             continue;
         }
 
+        if (node >= scene.bvh.nodeCount / 2)  // Leaf node
+            continue;
+
         auto intersections = rayAABBintersection(rayOrigin, rayDirectionInv, scene.bvh.nodes[node].aabb);
         auto tNear = intersections.first;
         auto tFar = intersections.second;
@@ -70,6 +68,14 @@ __device__ bool intersectsBVH(const Scene& scene, const vec3& rayOrigin, const v
         auto rightChild = 2 * node + 2;
         stack[stackSize++] = rightChild;
         stack[stackSize++] = leftChild;
+
+// #define DEBUG_BVH_STACK
+#ifdef DEBUG_BVH_STACK
+        if (stackSize >= 64) {
+            printf("BVH traversal stack overflow\n");
+            return false;
+        }
+#endif
     }
 
     return false;

@@ -16,7 +16,7 @@ static vec3 randomPointOnPatch(const Patch& patch) {
 f32 calculateFormFactor(const Patch& patchA, const Patch& patchB, const Scene& scene) {
     f32 F = 0;
 
-    constexpr auto rayCount = 8;  // TODO make this a parameter
+    constexpr auto rayCount = 4;  // TODO make this a parameter
     for (u32 i = 0; i < rayCount; i++) {
         auto rayOrigin = randomPointOnPatch(patchA);
         auto rayTarget = randomPointOnPatch(patchB);
@@ -28,9 +28,10 @@ f32 calculateFormFactor(const Patch& patchA, const Patch& patchB, const Scene& s
         if (glm::dot(rayDirection, patchA.face->normal) <= 0 || glm::dot(-rayDirection, patchB.face->normal) <= 0)
             continue;
 
+        Interval<f32> tInterval = {0.01f, targetDistance - 0.01f};  // leeway for shared edges passing through the lightmap
+
 #define USE_BVH
 #ifdef USE_BVH
-        Interval<f32> tInterval = {0, targetDistance - 0.01f};  // leeway for shared edges passing through the lightmap}
         auto intersectionPredicate = [&](f32 t, const Face& face) {
             return face != *patchA.face && face != *patchB.face;
         };
@@ -45,10 +46,8 @@ f32 calculateFormFactor(const Patch& patchA, const Patch& patchB, const Scene& s
                 continue;
 
             f32 t = rayTriangleIntersection(rayOrigin, rayDirection, face.vertices);
-            if (std::isnan(t))
-                continue;
 
-            if (t < targetDistance - 0.01f) {  // leeway for shared edges passing through the lightmap
+            if (!isnan(t) && tInterval.contains(t)) {
                 hit = true;
                 break;
             }

@@ -21,7 +21,5 @@ private:
 
     void buildRecursive(u32 startFace, u32 endFace, u32 node);
 
-    bool intersectsRecursive(const vec3& rayOrigin, const vec3& rayDirection, const vec3& rayDirectionInv, u32 node, const Interval<f32>& tInterval, const std::function<bool(f32, const Face&)>& hitPredicate) const;
-
-    friend class CUDASolver; // needed to make a deep copy of the BVH
+    friend class CUDASolver;  // needed to make a deep copy of the BVH
 };

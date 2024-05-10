@@ -47,3 +47,19 @@ template <typename T, typename... Args>
 inline Scoped<T> makeScoped(Args&&... args) {
     return std::make_unique<T>(std::forward<Args>(args)...);
 }
+
+/*
+ * @brief Type identity metafunction.
+ */
+template <class T>
+struct TypeIdentity {
+    typedef T type;
+};
+
+/*
+ * @brief Implicitly casts a value to a different type.
+ */
+template <typename T>
+constexpr inline T implicitCast(typename TypeIdentity<T>::type x) noexcept {
+    return x;
+}

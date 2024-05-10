@@ -16,12 +16,13 @@ struct Face {
         return this == &other;
     }
 
-    AABB calculateAABB() const {
+    AABB calculateAABB() {
         AABB aabb = {vec3(std::numeric_limits<f32>::max()), vec3(std::numeric_limits<f32>::lowest())};
         for (const vec3& vertex : vertices) {
             aabb.min = min(aabb.min, vertex);
             aabb.max = max(aabb.max, vertex);
         }
+        this->aabb = aabb;
         return aabb;
     }
 };

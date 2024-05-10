@@ -143,7 +143,7 @@ inline T random() {
         return RANDOM_GENERATOR() & 1;
     else {
         auto value = RANDOM_GENERATOR();
-        return *reinterpret_cast<T*>(&value);
+        return std::bit_cast<T>(value);
     }
 }
 

@@ -307,12 +307,12 @@ MATH_CONSTEXPR MATH_FUNC_QUALIFIER std::pair<f32, f32> rayAABBintersection(const
     // https://tavianator.com/2011/ray_box.html
     // https://gist.github.com/DomNomNom/46bb1ce47f68d255fd5d
 
-    vec3 tMin = (box.min - rayOrigin) * rayDirectionInv;
-    vec3 tMax = (box.max - rayOrigin) * rayDirectionInv;
-    vec3 t1 = glm::min(tMin, tMax);
-    vec3 t2 = glm::max(tMin, tMax);
-    f32 tNear = std::max(std::max(t1.x, t1.y), t1.z);
-    f32 tFar = std::min(std::min(t2.x, t2.y), t2.z);
+    vec3 t1 = (box.min - rayOrigin) * rayDirectionInv;
+    vec3 t2 = (box.max - rayOrigin) * rayDirectionInv;
+    vec3 tMin = glm::min(t1, t2);
+    vec3 tMax = glm::max(t1, t2);
+    f32 tNear = glm::max(tMin.x, glm::max(tMin.y, tMin.z));
+    f32 tFar = glm::min(tMax.x, glm::min(tMax.y, tMax.z));
 
     if (tNear > tFar)
         return {NAN, NAN};

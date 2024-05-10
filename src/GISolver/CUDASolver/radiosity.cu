@@ -23,7 +23,7 @@ __device__ vec3 randomPointOnPatch(const Patch& patch, RNG& rng) {
 __device__ f32 calculateFormFactor(const Patch& patchA, const Patch& patchB, const Scene& scene, RNG& rng) {
     f32 F = 0;
 
-    constexpr auto rayCount = 8;  // TODO make this a parameter
+    constexpr auto rayCount = 4;  // TODO make this a parameter
     for (u32 i = 0; i < rayCount; i++) {
         auto rayOrigin = randomPointOnPatch(patchA, rng);
         auto rayTarget = randomPointOnPatch(patchB, rng);
@@ -35,9 +35,10 @@ __device__ f32 calculateFormFactor(const Patch& patchA, const Patch& patchB, con
         if (glm::dot(rayDirection, scene.faces[patchA.faceId].normal) <= 0 || glm::dot(-rayDirection, scene.faces[patchB.faceId].normal) <= 0)
             continue;
 
+        Interval<f32> tInterval = {0.01f, targetDistance - 0.01f};  // leeway for shared edges passing through the lightmap
+
 #define USE_BVH
 #ifdef USE_BVH
-        Interval<f32> tInterval = {0, targetDistance - 0.01f};  // leeway for shared edges passing through the lightmap
         u32 excludeFaces[] = {patchA.faceId, patchB.faceId};
         bool hit = intersectsBVH(scene, rayOrigin, rayDirection, tInterval, excludeFaces);
 #else
@@ -51,10 +52,8 @@ __device__ f32 calculateFormFactor(const Patch& patchA, const Patch& patchB, con
                 continue;
 
             auto t = rayTriangleIntersection(rayOrigin, rayDirection, face.vertices);
-            if (isnan(t))
-                continue;
 
-            if (t < targetDistance - 0.01f) {  // leeway for shared edges passing through the lightmap
+            if (!isnan(t) && tInterval.contains(t)) {
                 hit = true;
                 break;
             }
@@ -96,7 +95,7 @@ __global__ void gather(uvec2 lightmapSize, vec3* lightmap, vec3* residues, vec3*
             auto shooterIdx = shooterST.y * lightmapSize.x + shooterST.x;
             auto& shooter = scene.patches[shooterIdx];
             auto shooterResidue = residues[shooterIdx];
-            if (shooter.faceId == NULL_ID || shooterIdx == destinationIdx || shooter.faceId == destination.faceId || (shooterResidue.x == 0 && shooterResidue.y == 0 && shooterResidue.z == 0))
+            if (shooter.faceId == NULL_ID || shooterIdx == destinationIdx || shooter.faceId == destination.faceId || shooterResidue == vec3(0))
                 continue;
 
             // check if the patches are facing each other

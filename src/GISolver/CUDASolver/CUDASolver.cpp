@@ -1,11 +1,17 @@
 #include "CUDASolver.h"
 
+#include <cuda.h>
+
 #include "CUDAStructs.h"
 
 extern "C" vec3* solveRadiosityCUDA(u32 bounces, uvec2 lightmapSize, const CUDAStructs::Scene& sceneHost);
 
 void CUDASolver::initialize(const Ref<const Scene>& scene) {
     IGISolver::initialize(scene);
+
+    // TODO page locked memory
+    // cudaHostAlloc
+    // https://stackoverflow.com/questions/14807192/can-i-use-an-stdvector-as-a-facade-for-a-pre-allocated-raw-array
 
     m_lightmapSize = {static_cast<int>(scene->lightmapSize().x), static_cast<int>(scene->lightmapSize().y)};
 

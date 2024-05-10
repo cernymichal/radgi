@@ -30,8 +30,8 @@ std::vector<Face> loadMesh(const std::filesystem::path& filePath) {
 
     for (const auto& material : materials) {
         auto mat = makeRef<Material>();
-        mat->albedo = *reinterpret_cast<const vec3*>(&material.diffuse);
-        mat->emission = *reinterpret_cast<const vec3*>(&material.emission);
+        mat->albedo = std::bit_cast<vec3>(material.diffuse);
+        mat->emission = std::bit_cast<vec3>(material.emission);
         materialRefs.push_back(mat);
     }
 
