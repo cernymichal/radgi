@@ -54,10 +54,7 @@
     <ClInclude Include="src\Utils\Scalars.h" />
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="src\GISolver\CUDASolver\radiosity.cu">
-      <FastMath Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</FastMath>
-      <FastMath Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</FastMath>
-    </CudaCompile>
+    <CudaCompile Include="src\GISolver\CUDASolver\radiosity.cu" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
@@ -223,6 +220,7 @@
       <Keep>false</Keep>
       <KeepDir>$(SolutionDir)bin\intermediates\$(Platform)\$(Configuration)</KeepDir>
       <AdditionalOptions>--expt-relaxed-constexpr %(AdditionalOptions)</AdditionalOptions>
+      <FastMath>true</FastMath>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -255,6 +253,7 @@
       <Keep>false</Keep>
       <KeepDir>$(SolutionDir)bin\intermediates\$(Platform)\$(Configuration)</KeepDir>
       <AdditionalOptions>--expt-relaxed-constexpr %(AdditionalOptions)</AdditionalOptions>
+      <FastMath>true</FastMath>
     </CudaCompile>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

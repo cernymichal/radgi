@@ -32,9 +32,6 @@ __device__ f32 calculateFormFactor(const Patch& patchA, const Patch& patchB, con
         auto targetDistance = glm::length(rayTarget - rayOrigin);
         auto rayDirection = (rayTarget - rayOrigin) / targetDistance;
 
-        if (glm::dot(rayDirection, scene.faces[patchA.faceId].normal) <= 0 || glm::dot(-rayDirection, scene.faces[patchB.faceId].normal) <= 0)
-            continue;
-
         Interval<f32> tInterval = {0.01f, targetDistance - 0.01f};  // leeway for shared edges passing through the lightmap
 
 #define USE_BVH
@@ -66,51 +63,68 @@ __device__ f32 calculateFormFactor(const Patch& patchA, const Patch& patchB, con
         auto ray = rayTarget - rayOrigin;
         auto r2 = glm::dot(ray, ray);
         auto cosines = glm::dot(rayDirection, scene.faces[patchA.faceId].normal) * glm::dot(-rayDirection, scene.faces[patchB.faceId].normal);
-        f32 deltaF = cosines * patchB.area / (PI * r2);  // + patchB.area / rayCount);
-
-        if (deltaF > 0)
-            F += deltaF;
+        f32 deltaF = cosines / (PI * r2);
+        F += glm::max(deltaF, 0.0f);
     }
 
     return F / rayCount;
 }
 
-__global__ void gather(uvec2 lightmapSize, vec3* lightmap, vec3* residues, vec3* nextResidues, const Scene scene, u32 rngSeed) {
-    uvec2 destinationST = uvec2(blockIdx.x * blockDim.x + threadIdx.x, blockIdx.y * blockDim.y + threadIdx.y);
-    if (destinationST.x >= lightmapSize.x || destinationST.y >= lightmapSize.y)
-        return;
+__device__ __forceinline__ void atomicAdd(vec3* target, const vec3& value) {
+    atomicAdd(&target->x, value.x);
+    atomicAdd(&target->y, value.y);
+    atomicAdd(&target->z, value.z);
+}
 
-    auto destinationIdx = destinationST.y * lightmapSize.x + destinationST.x;
-    auto& destination = scene.patches[destinationIdx];
+__global__ void gather(const uvec2 lightmapSize, vec3* lightmap, const vec3* residues, vec3* nextResidues, const Scene scene, const u32 rngSeed, u32 threadQuota) {
+    u64 threadId = blockIdx.x * blockDim.x + threadIdx.x;
+    u64 startCombinationIdx = threadId * threadQuota;
+    u64 patchCount = lightmapSize.x * lightmapSize.y;
 
-    if (destination.faceId == NULL_ID)
-        return;  // nothing to solve
+    glm::vec<2, u64> patches;
+    patches.y = floor((sqrt(8.0 * startCombinationIdx + 1) + 1) / 2);
+    const auto prev_y = patches.y - 1;
+    patches.x = startCombinationIdx - prev_y * (prev_y - 1) / 2 - prev_y;
 
-    RNG rng(rngSeed + destinationIdx);
+    RNG rng(rngSeed + threadId);
 
-    // shoot to other patches
-    auto shooterST = uvec2(0, 0);
-    for (shooterST.y = 0; shooterST.y < lightmapSize.y; shooterST.y++) {
-        for (shooterST.x = 0; shooterST.x < lightmapSize.x; shooterST.x++) {
-            auto shooterIdx = shooterST.y * lightmapSize.x + shooterST.x;
-            auto& shooter = scene.patches[shooterIdx];
-            auto shooterResidue = residues[shooterIdx];
-            if (shooter.faceId == NULL_ID || shooterIdx == destinationIdx || shooter.faceId == destination.faceId || shooterResidue == vec3(0))
-                continue;
-
-            // check if the patches are facing each other
-            auto sightLine = glm::normalize(shooter.vertices[0] - destination.vertices[0]);
-            if (glm::dot(sightLine, scene.faces[destination.faceId].normal) <= 0 || glm::dot(-sightLine, scene.faces[shooter.faceId].normal) <= 0)
-                continue;
-
-            auto F = calculateFormFactor(shooter, destination, scene, rng);
-            if (F == 0)
-                continue;
-
-            auto deltaRad = scene.materials[scene.faces[destination.faceId].materialId].albedo * shooterResidue * F * shooter.area / destination.area;
-            nextResidues[destinationIdx] += deltaRad;
-            lightmap[destinationIdx] += deltaRad;
+    for (i32 i = 0; i < threadQuota; i++) {
+        if (i != 0)
+            patches.x++;
+        if (patches.x >= patches.y) {
+            patches.x = 0;
+            patches.y++;
         }
+
+        if (patches.x >= patchCount || patches.y >= patchCount)
+            return;
+
+        auto& patchA = scene.patches[patches.x];
+        auto& patchB = scene.patches[patches.y];
+        if (patchA.faceId == NULL_ID || patchB.faceId == NULL_ID)
+            continue;
+
+        vec3 patchAResidue = residues[patches.x];
+        vec3 patchBResidue = residues[patches.y];
+        if (patchAResidue == vec3(0) && patchBResidue == vec3(0))
+            continue;
+
+        // check if the patches are facing each other
+        auto sightLine = glm::normalize(patchB.vertices[0] - patchA.vertices[0]);
+        if (glm::dot(sightLine, scene.faces[patchA.faceId].normal) <= 0 || glm::dot(-sightLine, scene.faces[patchB.faceId].normal) <= 0)
+            continue;
+
+        auto F = calculateFormFactor(patchA, patchB, scene, rng);
+        if (F == 0)
+            continue;
+
+        auto deltaRadA = scene.materials[scene.faces[patchA.faceId].materialId].albedo * patchBResidue * F * patchB.area;
+        auto deltaRadB = scene.materials[scene.faces[patchB.faceId].materialId].albedo * patchAResidue * F * patchA.area;
+
+        atomicAdd(&nextResidues[patches.x], deltaRadA);
+        atomicAdd(&lightmap[patches.x], deltaRadA);
+        atomicAdd(&nextResidues[patches.y], deltaRadB);
+        atomicAdd(&lightmap[patches.y], deltaRadB);
     }
 }
 
@@ -170,10 +184,17 @@ extern "C" vec3* solveRadiosityCUDA(u32 bounces, uvec2 lightmapSize, const Scene
     checkCUDAError(cudaPeekAtLastError());
     checkCUDAError(cudaDeviceSynchronize());
 
+    u32 kernelQuota = glm::max(1.0, 0.003 * (lightmapSize.x * lightmapSize.y) - 195.608);
+    u64 kernelCount = u64(lightmapSize.x * lightmapSize.y) * (lightmapSize.x * lightmapSize.y - 1) / 2 / kernelQuota;
+    printf("Kernel quota: %d\n", kernelQuota);
+    printf("Kernel count: %lu\n", kernelCount);
+    blockSize = 256;
+    blocks = ceil(kernelCount / static_cast<f64>(blockSize.x));
+
     // gather
     for (size_t bounce = 0; bounce < bounces; bounce++) {
         u32 rngSeed = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-        gather<<<blocks, blockSize>>>(lightmapSize, lightmapDevice, residuesDevice, nextResiduesDevice, sceneDevice, rngSeed);
+        gather<<<blocks, blockSize>>>(lightmapSize, lightmapDevice, residuesDevice, nextResiduesDevice, sceneDevice, rngSeed, kernelQuota);
 
         std::swap(residuesDevice, nextResiduesDevice);
         cudaMemsetAsync(nextResiduesDevice, 0, lightmapSize.x * lightmapSize.y * sizeof(vec3));

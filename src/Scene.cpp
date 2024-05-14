@@ -129,11 +129,17 @@ void Scene::createPatches() {
                 }
 
                 // translate the texel vertices to world space
+                bool invalidPatch = false;
                 std::array<vec3, 4> patchVerticesWS;
                 for (u32 i = 0; i < patchVertexCount; i++) {
                     vec3 barycentric = barycentricCoordinates(face.lightmapUVs, patchVertices[i]);
                     patchVerticesWS[i] = barycentric.x * face.vertices[0] + barycentric.y * face.vertices[1] + barycentric.z * face.vertices[2];
+
+                    if (glm::any(glm::isnan(patchVerticesWS[i])))
+                         invalidPatch = true;
                 }
+                if (invalidPatch)
+                    continue;
 
                 m_patches[uvec2(x, y)] = Patch(patchVertexCount, patchVerticesWS, &face);
             }

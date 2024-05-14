@@ -58,7 +58,7 @@ f32 calculateFormFactor(const Patch& patchA, const Patch& patchB, const Scene& s
 
         f32 r2 = glm::length2(rayTarget - rayOrigin);
         f32 cosines = glm::dot(rayDirection, patchA.face->normal) * glm::dot(-rayDirection, patchB.face->normal);
-        f32 deltaF = cosines * patchB.area / (PI * r2);  // + patchB.area / rayCount);
+        f32 deltaF = cosines / (PI * r2);
 
         if (deltaF > 0)
             F += deltaF;

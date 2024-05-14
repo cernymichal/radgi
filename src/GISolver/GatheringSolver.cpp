@@ -51,9 +51,9 @@ f32 GatheringSolver::gather(uvec2 destinationIdx) {
     if (destination.face == nullptr)
         return 0;  // nothing to solve
 
-    f32 gatheredRad = 0;
+    vec3 gatheredRad = vec3(0);
 
-    // shoot to other patches
+    // gather from other patches
     auto shooterIdx = uvec2(0, 0);
     for (shooterIdx.y = 0; shooterIdx.y < m_lightmapSize.y; shooterIdx.y++) {
         for (shooterIdx.x = 0; shooterIdx.x < m_lightmapSize.x; shooterIdx.x++) {
@@ -71,11 +71,13 @@ f32 GatheringSolver::gather(uvec2 destinationIdx) {
             if (F == 0)
                 continue;
 
-            auto deltaRad = destination.face->material->albedo * shooterResidue * F * shooter.area / destination.area;
-            m_nextResidues[destinationIdx] += deltaRad;
-            m_lightmap[destinationIdx] += deltaRad;
+            auto deltaRad = destination.face->material->albedo * shooterResidue * F * shooter.area;
+            gatheredRad += deltaRad;
         }
     }
 
-    return gatheredRad;  // return the amount of light gathered
+    m_nextResidues[destinationIdx] += gatheredRad;
+    m_lightmap[destinationIdx] += gatheredRad;
+
+    return 0;  // TODO return the amount of light gathered
 }
