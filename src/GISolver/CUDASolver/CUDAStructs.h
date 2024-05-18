@@ -14,7 +14,7 @@ struct Material {
 };
 
 struct Face {
-    MATH_ARRAY<vec3, 3> vertices;
+    std::array<vec3, 3> vertices;
     vec3 normal;
     u16 materialId;  // TODO can this indirection be removed?
 
@@ -24,7 +24,7 @@ struct Face {
 };
 
 struct Patch {
-    MATH_ARRAY<vec3, 4> vertices;
+    std::array<vec3, 4> vertices;
     u8 vertexCount;
     f32 area;
     u32 faceId;

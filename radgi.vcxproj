@@ -219,7 +219,7 @@
     <CudaCompile>
       <Keep>false</Keep>
       <KeepDir>$(SolutionDir)bin\intermediates\$(Platform)\$(Configuration)</KeepDir>
-      <AdditionalOptions>--expt-relaxed-constexpr %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>--expt-relaxed-constexpr --std c++20 -Xcudafe "--diag_suppress=20012" %(AdditionalOptions)</AdditionalOptions>
       <FastMath>true</FastMath>
     </CudaCompile>
   </ItemDefinitionGroup>
@@ -252,7 +252,7 @@
       <CompileOut>$(SolutionDir)bin\intermediates\$(Platform)\$(Configuration)\%(Filename)%(Extension).obj</CompileOut>
       <Keep>false</Keep>
       <KeepDir>$(SolutionDir)bin\intermediates\$(Platform)\$(Configuration)</KeepDir>
-      <AdditionalOptions>--expt-relaxed-constexpr %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>--expt-relaxed-constexpr --std c++20 -Xcudafe "--diag_suppress=20012" %(AdditionalOptions)</AdditionalOptions>
       <FastMath>true</FastMath>
     </CudaCompile>
   </ItemDefinitionGroup>

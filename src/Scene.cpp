@@ -22,19 +22,32 @@ static vec3 barycentricCoordinates(const std::array<vec2, 3>& vertices, const ve
     return barycentric / area;
 }
 
-std::tuple<std::array<vec2, 4>, u8> faceTexelIntersection(const Face& face, const std::array<vec2, 4>& texelVertices) {
+static std::tuple<std::array<vec2, 4>, u8> faceTexelIntersection(const Face& face, const std::array<vec2, 4>& texelVertices) {
     std::array<vec2, 4> intersectionVertices;
     u8 intersectionVertexCount = 0;
+
+    auto eps = 0.0001f;
 
     // add texel vertices if they are inside the face
     for (u32 i = 0; i < 4; i++) {
         vec3 barycentric = barycentricCoordinates(face.lightmapUVs, texelVertices[i]);
-        if (glm::all(barycentric >= vec3(0)))
+        if (glm::all(barycentric >= vec3(0 - eps)))
             intersectionVertices[intersectionVertexCount++] = texelVertices[i];
     }
 
     if (intersectionVertexCount == 4)  // all texel vertices are inside the face
-        return {texelVertices, 4};
+        return {intersectionVertices, 4};
+
+    // add face vertices inside the texel
+    for (u32 i = 0; i < 3; i++) {
+        if (glm::all(face.lightmapUVs[i] > texelVertices[0] - vec2(-eps)) && glm::all(face.lightmapUVs[i] < texelVertices[2] + vec2(-eps))) {
+            // polygons with more than 4 vertices would be too complex to handle
+            if (intersectionVertexCount == 4)
+                return {intersectionVertices, 4};
+
+            intersectionVertices[intersectionVertexCount++] = face.lightmapUVs[i];
+        }
+    }
 
     // add edge intersections
     for (u32 i = 0; i < 4; i++) {
@@ -46,10 +59,10 @@ std::tuple<std::array<vec2, 4>, u8> faceTexelIntersection(const Face& face, cons
             auto faceEdge = face.lightmapUVs[(j + 1) % 3] - faceVertex;
 
             vec2 params = lineIntersection(texelVertex, texelEdge, faceVertex, faceEdge);
-            if (params.x > 0 && params.x < 1 && params.y >= 0 && params.y <= 1) {
+            if (params.x > 0 - eps && params.x < 1 + eps && params.y > 0 - eps && params.y < 1 + eps) {
                 // polygons with more than 4 vertices would be too complex to handle
                 if (intersectionVertexCount == 4)
-                    return {texelVertices, 4};
+                    return {intersectionVertices, 4};
 
                 auto intersection = texelVertex + params.x * texelEdge;
                 intersectionVertices[intersectionVertexCount++] = intersection;
@@ -57,19 +70,8 @@ std::tuple<std::array<vec2, 4>, u8> faceTexelIntersection(const Face& face, cons
         }
     }
 
-    // add face vertices inside the texel
-    for (u32 i = 0; i < 3; i++) {
-        if (glm::all(face.lightmapUVs[i] > texelVertices[0]) && glm::all(face.lightmapUVs[i] < texelVertices[2])) {
-            // polygons with more than 4 vertices would be too complex to handle
-            if (intersectionVertexCount == 4)
-                return {texelVertices, 4};
-
-            intersectionVertices[intersectionVertexCount++] = face.lightmapUVs[i];
-        }
-    }
-
     if (intersectionVertexCount < 3)
-        return {{}, 0};
+        return {intersectionVertices, 0};
 
     // sort the vertices to CCW order
     auto center = vec2(0);
@@ -105,8 +107,8 @@ void Scene::createPatches() {
         vec2 min = glm::min(glm::min(face.lightmapUVs[0], face.lightmapUVs[1]), face.lightmapUVs[2]);
         vec2 max = glm::max(glm::max(face.lightmapUVs[0], face.lightmapUVs[1]), face.lightmapUVs[2]);
 
-        uvec2 minTexel = uvec2(min / texelSize);
-        uvec2 maxTexel = uvec2(max / texelSize);
+        uvec2 minTexel = glm::clamp(uvec2(min / texelSize), uvec2(0), m_lightmapSize - uvec2(1));
+        uvec2 maxTexel = glm::clamp(uvec2(max / texelSize), uvec2(0), m_lightmapSize - uvec2(1));
 
         for (u32 y = minTexel.y; y <= maxTexel.y; y++) {
             for (u32 x = minTexel.x; x <= maxTexel.x; x++) {
@@ -122,10 +124,11 @@ void Scene::createPatches() {
                     continue;
 
                 if (m_patches[uvec2(x, y)].face != nullptr) {
-                    // TODO merge the patches somehow
+                    // TODO merge the patches - save all vertices in patch map and then create the geometry by merging equal vertices and collapsing edges
 
-                    patchVertices = texelVertices;
-                    patchVertexCount = 4;
+                    // patchVertices = texelVertices;
+                    // patchVertexCount = 4;
+                    continue;
                 }
 
                 // translate the texel vertices to world space
@@ -136,7 +139,7 @@ void Scene::createPatches() {
                     patchVerticesWS[i] = barycentric.x * face.vertices[0] + barycentric.y * face.vertices[1] + barycentric.z * face.vertices[2];
 
                     if (glm::any(glm::isnan(patchVerticesWS[i])))
-                         invalidPatch = true;
+                        invalidPatch = true;
                 }
                 if (invalidPatch)
                     continue;

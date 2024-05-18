@@ -25,9 +25,6 @@ f32 calculateFormFactor(const Patch& patchA, const Patch& patchB, const Scene& s
         auto targetDistance = glm::length(rayTarget - rayOrigin);
         auto rayDirection = (rayTarget - rayOrigin) / targetDistance;
 
-        if (glm::dot(rayDirection, patchA.face->normal) <= 0 || glm::dot(-rayDirection, patchB.face->normal) <= 0)
-            continue;
-
         Interval<f32> tInterval = {0.01f, targetDistance - 0.01f};  // leeway for shared edges passing through the lightmap
 
 #define USE_BVH
@@ -58,10 +55,8 @@ f32 calculateFormFactor(const Patch& patchA, const Patch& patchB, const Scene& s
 
         f32 r2 = glm::length2(rayTarget - rayOrigin);
         f32 cosines = glm::dot(rayDirection, patchA.face->normal) * glm::dot(-rayDirection, patchB.face->normal);
-        f32 deltaF = cosines / (PI * r2);
-
-        if (deltaF > 0)
-            F += deltaF;
+        f32 deltaF = cosines / (pi_v<f32> * r2);
+        F += glm::max(deltaF, 0.0f);
     }
 
     return F / rayCount;

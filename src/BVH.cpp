@@ -6,7 +6,7 @@ void BVH::build() {
     for (Face& face : m_faces)
         face.calculateAABB();
 
-    buildRecursive(0, m_faces.size(), 0);
+    buildRecursive(0, static_cast<u32>(m_faces.size()), 0);
 }
 
 bool BVH::intersects(const vec3& rayOrigin, const vec3& rayDirection, const Interval<f32>& tInterval, const std::function<bool(f32, const Face&)>& hitPredicate) const {

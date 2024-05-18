@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <numbers>
 #include <ostream>
 #include <utility>
 
@@ -8,22 +9,18 @@
 
 #ifdef __CUDACC__
 
-#define GLM_FORCE_CUDA
-#define CUDA_VERSION 12400
-
+#include <cuda.h>
 #include <cuda_runtime.h>
 
 #define MATH_CONSTEXPR
-#define MATH_FUNC_QUALIFIER __device__ __host__ __forceinline__
+#define MATH_FUNC_QUALIFIER __device__ __host__
 
-#include <cuda/std/array>
-#define MATH_ARRAY cuda::std::array
+#define GLM_FORCE_CUDA
 
 #else
 
+#define MATH_FUNC_QUALIFIER
 #define MATH_CONSTEXPR constexpr
-#define MATH_FUNC_QUALIFIER inline
-#define MATH_ARRAY std::array
 
 #endif
 
@@ -34,10 +31,8 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/quaternion.hpp>
 
-constexpr f64 E = 2.7182818284590452353602874713526624977572470936999595749669676277240766303535475945713821785251664274;
-constexpr f64 HALF_PI = 1.5707963267948966192313216916397514420985846996875529104874722961539082031431044993140174126710585339;
-constexpr f64 PI = 3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679;
-constexpr f64 TWO_PI = 6.2831853071795864769252867665590057683943387987502116419498891846156328125724179972560696506842341358;
+using std::numbers::e_v;
+using std::numbers::pi_v;
 
 using glm::dvec2;
 using glm::dvec3;
@@ -59,7 +54,7 @@ using glm::vec4;
 namespace glm {
 
 template <typename T, glm::qualifier Q>
-MATH_CONSTEXPR MATH_FUNC_QUALIFIER T cross(const glm::vec<2, T, Q>& a, const glm::vec<2, T, Q>& b) {
+MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline T cross(const glm::vec<2, T, Q>& a, const glm::vec<2, T, Q>& b) {
     return a.x * b.y - a.y * b.x;
 }
 
@@ -69,7 +64,7 @@ MATH_CONSTEXPR MATH_FUNC_QUALIFIER T cross(const glm::vec<2, T, Q>& a, const glm
  * @param v The incoming vector
  * @param normal The normal vector
  */
-MATH_CONSTEXPR MATH_FUNC_QUALIFIER vec3 reflect(const vec3& v, const vec3& normal) {
+MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline vec3 reflect(const vec3& v, const vec3& normal) {
     return v - 2.0f * glm::dot(v, normal) * normal;
 }
 
@@ -78,7 +73,7 @@ MATH_CONSTEXPR MATH_FUNC_QUALIFIER vec3 reflect(const vec3& v, const vec3& norma
  * @param normal The normal vector, normalized
  * @param refractionRatio The ratio of the incoming to outgoing refractive indices
  */
-MATH_FUNC_QUALIFIER vec3 refract(const vec3& v, const vec3& normal, f32 refractionRatio) {
+MATH_FUNC_QUALIFIER inline vec3 refract(const vec3& v, const vec3& normal, f32 refractionRatio) {
     // Snell's law
     auto cosTheta = std::min(glm::dot(-v, normal), 1.0f);
     auto outgoingPerpendicular = refractionRatio * (v + cosTheta * normal);
@@ -95,11 +90,11 @@ MATH_FUNC_QUALIFIER vec3 refract(const vec3& v, const vec3& normal, f32 refracti
  *
  * @note If the lines are parallel, the result is undefined
  */
-MATH_CONSTEXPR MATH_FUNC_QUALIFIER vec2 lineIntersection(const vec2& aOrigin, const vec2& aDirection, const vec2& bOrigin, const vec2& bDirection) {
+MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline vec2 lineIntersection(const vec2& aOrigin, const vec2& aDirection, const vec2& bOrigin, const vec2& bDirection) {
     // X = aOrigin + aDirection * t
     // X = bOrigin + bDirection * u
 
-    f32 t = glm::cross(bOrigin - aOrigin, bDirection / glm::cross(aDirection, bDirection));
+    f32 t = glm::cross(bOrigin - aOrigin, bDirection / glm::cross(aDirection, bDirection));  // TODO calc only one parameter
     f32 u = glm::cross(aOrigin - bOrigin, aDirection / glm::cross(bDirection, aDirection));
     return vec2(t, u);
 }
@@ -112,7 +107,7 @@ MATH_CONSTEXPR MATH_FUNC_QUALIFIER vec2 lineIntersection(const vec2& aOrigin, co
  *
  * @note back facing triangles are not intersected
  */
-MATH_CONSTEXPR MATH_FUNC_QUALIFIER f32 rayTriangleIntersection(const vec3& rayOrigin, const vec3& rayDirection, const MATH_ARRAY<vec3, 3>& vertices) {
+MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline f32 rayTriangleIntersection(const vec3& rayOrigin, const vec3& rayDirection, const std::array<vec3, 3>& vertices) {
     // X = rayOrigin + rayDirection * t
 
     // Möller–Trumbore intersection algorithm
@@ -123,7 +118,7 @@ MATH_CONSTEXPR MATH_FUNC_QUALIFIER f32 rayTriangleIntersection(const vec3& rayOr
 
     // if the determinant is negative, the triangle is back facing
     // if the determinant is close to 0, the ray misses the triangle
-    if (determinant < 0.0001f)
+    if (glm::abs(determinant) < 0.0001f)
         return NAN;
 
     auto determinantInv = 1.0f / determinant;
@@ -148,7 +143,7 @@ MATH_CONSTEXPR MATH_FUNC_QUALIFIER f32 rayTriangleIntersection(const vec3& rayOr
  * @param cosine The cosine of the angle between the incident ray and the normal
  * @param refractionRatio The ratio of the incoming to outgoing refractive indices
  */
-MATH_FUNC_QUALIFIER f32 reflectance(f32 cosine, f32 refractionRatio) {
+MATH_FUNC_QUALIFIER inline f32 reflectance(f32 cosine, f32 refractionRatio) {
     // schlick's reflectance approximation
     auto r0 = (1 - refractionRatio) / (1 + refractionRatio);
     r0 *= r0;
@@ -158,32 +153,32 @@ MATH_FUNC_QUALIFIER f32 reflectance(f32 cosine, f32 refractionRatio) {
 // Comparison operators for vectors
 
 template <int L, typename T, glm::qualifier Q>
-MATH_CONSTEXPR MATH_FUNC_QUALIFIER glm::vec<L, bool> operator!(const glm::vec<L, T, Q>& v) {
+MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline glm::vec<L, bool> operator!(const glm::vec<L, T, Q>& v) {
     return glm::not_(v);
 }
 
 template <int L, typename T, glm::qualifier Q>
-MATH_CONSTEXPR MATH_FUNC_QUALIFIER glm::vec<L, bool> operator==(const glm::vec<L, T, Q>& a, const glm::vec<L, T, Q>& b) {
+MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline glm::vec<L, bool> operator==(const glm::vec<L, T, Q>& a, const glm::vec<L, T, Q>& b) {
     return glm::equal(a, b);
 }
 
 template <int L, typename T, glm::qualifier Q>
-MATH_CONSTEXPR MATH_FUNC_QUALIFIER glm::vec<L, bool> operator!=(const glm::vec<L, T, Q>& a, const glm::vec<L, T, Q>& b) {
+MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline glm::vec<L, bool> operator!=(const glm::vec<L, T, Q>& a, const glm::vec<L, T, Q>& b) {
     return glm::notEqual(a, b);
 }
 
 template <int L, typename T, glm::qualifier Q>
-MATH_CONSTEXPR MATH_FUNC_QUALIFIER glm::vec<L, bool> operator>(const glm::vec<L, T, Q>& a, const glm::vec<L, T, Q>& b) {
+MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline glm::vec<L, bool> operator>(const glm::vec<L, T, Q>& a, const glm::vec<L, T, Q>& b) {
     return glm::greaterThan(a, b);
 }
 
 template <int L, typename T, glm::qualifier Q>
-MATH_CONSTEXPR MATH_FUNC_QUALIFIER glm::vec<L, bool> operator>=(const glm::vec<L, T, Q>& a, const glm::vec<L, T, Q>& b) {
+MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline glm::vec<L, bool> operator>=(const glm::vec<L, T, Q>& a, const glm::vec<L, T, Q>& b) {
     return glm::greaterThanEqual(a, b);
 }
 
 template <int L, typename T, glm::qualifier Q>
-MATH_CONSTEXPR MATH_FUNC_QUALIFIER glm::vec<L, bool> operator<(const glm::vec<L, T, Q>& a, const glm::vec<L, T, Q>& b) {
+MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline glm::vec<L, bool> operator<(const glm::vec<L, T, Q>& a, const glm::vec<L, T, Q>& b) {
     return glm::lessThan(a, b);
 }
 
@@ -195,19 +190,19 @@ MATH_CONSTEXPR MATH_FUNC_QUALIFIER glm::vec<L, bool> operator<=(const glm::vec<L
 // Stream operators for vectors
 
 template <typename T>
-MATH_FUNC_QUALIFIER std::ostream& operator<<(std::ostream& os, const glm::vec<2, T>& v) {
+MATH_FUNC_QUALIFIER inline std::ostream& operator<<(std::ostream& os, const glm::vec<2, T>& v) {
     os << "(" << v.x << ", " << v.y << ")";
     return os;
 }
 
 template <typename T>
-MATH_FUNC_QUALIFIER std::ostream& operator<<(std::ostream& os, const glm::vec<3, T>& v) {
+MATH_FUNC_QUALIFIER inline std::ostream& operator<<(std::ostream& os, const glm::vec<3, T>& v) {
     os << "(" << v.x << ", " << v.y << ", " << v.z << ")";
     return os;
 }
 
 template <typename T>
-MATH_FUNC_QUALIFIER std::ostream& operator<<(std::ostream& os, const glm::vec<4, T>& v) {
+MATH_FUNC_QUALIFIER inline std::ostream& operator<<(std::ostream& os, const glm::vec<4, T>& v) {
     os << "(" << v.x << ", " << v.y << ", " << v.z << ", " << v.w << ")";
     return os;
 }
@@ -217,22 +212,22 @@ template <typename T>
 struct Interval {
     T min, max;
 
-    MATH_CONSTEXPR MATH_FUNC_QUALIFIER Interval() = default;
+    MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline Interval() = default;
 
-    MATH_CONSTEXPR MATH_FUNC_QUALIFIER Interval(T min, T max) : min(min), max(max) {}
+    MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline Interval(T min, T max) : min(min), max(max) {}
 
-    MATH_CONSTEXPR MATH_FUNC_QUALIFIER T length() const {
+    MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline T length() const {
         return max - min;
     }
 
-    MATH_CONSTEXPR MATH_FUNC_QUALIFIER T center() const {
+    MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline T center() const {
         if constexpr (std::is_same_v<T, f32> || std::is_same_v<T, vec3>)
             return (min + max) / 2.0f;
         else
             return (min + max) / 2;
     }
 
-    MATH_CONSTEXPR MATH_FUNC_QUALIFIER bool contains(T value) const {
+    MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline bool contains(T value) const {
         auto result = value >= min && value <= max;
 
         if constexpr (std::is_same_v<T, vec3>)
@@ -241,7 +236,7 @@ struct Interval {
             return result;
     }
 
-    MATH_CONSTEXPR MATH_FUNC_QUALIFIER bool surrounds(T value) const {
+    MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline bool surrounds(T value) const {
         auto result = value > min && value < max;
 
         if constexpr (std::is_same_v<T, vec3>)
@@ -250,7 +245,7 @@ struct Interval {
             return result;
     }
 
-    MATH_CONSTEXPR MATH_FUNC_QUALIFIER bool intersects(const Interval& other) const {
+    MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline bool intersects(const Interval& other) const {
         auto result = min <= other.max && max >= other.min;
 
         if constexpr (std::is_same_v<T, vec3>)
@@ -259,27 +254,27 @@ struct Interval {
             return result;
     }
 
-    MATH_CONSTEXPR MATH_FUNC_QUALIFIER Interval intersection(const Interval& other) const {
+    MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline Interval intersection(const Interval& other) const {
         return {glm::max(min, other.min), glm::min(max, other.max)};
     }
 
-    MATH_CONSTEXPR MATH_FUNC_QUALIFIER Interval boundingUnion(const Interval& other) const {
+    MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline Interval boundingUnion(const Interval& other) const {
         return {glm::min(min, other.min), glm::max(max, other.max)};
     }
 
-    MATH_CONSTEXPR MATH_FUNC_QUALIFIER Interval expand(T padding) const {
+    MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline Interval expand(T padding) const {
         return Interval(min - padding, max + padding);
     }
 
-    MATH_CONSTEXPR MATH_FUNC_QUALIFIER T clamp(T value) const {
+    MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline T clamp(T value) const {
         return glm::clamp(value, min, max);
     }
 
-    MATH_CONSTEXPR MATH_FUNC_QUALIFIER static Interval<T> empty() {
+    MATH_CONSTEXPR MATH_FUNC_QUALIFIER static inline Interval<T> empty() {
         return {std::numeric_limits<T>::max(), std::numeric_limits<T>::lowest()};
     }
 
-    MATH_CONSTEXPR MATH_FUNC_QUALIFIER static Interval<T> universe() {
+    MATH_CONSTEXPR MATH_FUNC_QUALIFIER static inline Interval<T> universe() {
         return {std::numeric_limits<T>::lowest(), std::numeric_limits<T>::max()};
     }
 };
@@ -288,12 +283,12 @@ struct Interval {
 using AABB = Interval<vec3>;
 
 template <>
-MATH_CONSTEXPR MATH_FUNC_QUALIFIER static Interval<vec3> Interval<vec3>::empty() {
+MATH_CONSTEXPR inline Interval<vec3> Interval<vec3>::empty() {
     return {vec3(std::numeric_limits<f32>::max()), vec3(std::numeric_limits<f32>::lowest())};
 }
 
 template <>
-MATH_CONSTEXPR MATH_FUNC_QUALIFIER static Interval<vec3> Interval<vec3>::universe() {
+MATH_CONSTEXPR inline Interval<vec3> Interval<vec3>::universe() {
     return {vec3(std::numeric_limits<f32>::lowest()), vec3(std::numeric_limits<f32>::max())};
 }
 
@@ -303,7 +298,7 @@ MATH_CONSTEXPR MATH_FUNC_QUALIFIER static Interval<vec3> Interval<vec3>::univers
  * @param box The AABB to check against
  * @return The tNear and tFar values of the intersection points along the ray, or NANs if there is no intersection
  */
-MATH_CONSTEXPR MATH_FUNC_QUALIFIER std::pair<f32, f32> rayAABBintersection(const vec3& rayOrigin, const vec3& rayDirectionInv, const AABB& box) {
+MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline std::pair<f32, f32> rayAABBintersection(const vec3& rayOrigin, const vec3& rayDirectionInv, const AABB& box) {
     // https://tavianator.com/2011/ray_box.html
     // https://gist.github.com/DomNomNom/46bb1ce47f68d255fd5d
 
@@ -319,3 +314,6 @@ MATH_CONSTEXPR MATH_FUNC_QUALIFIER std::pair<f32, f32> rayAABBintersection(const
 
     return {tNear, tFar};
 };
+
+#undef MATH_CONSTEXPR
+#undef MATH_FUNC_QUALIFIER

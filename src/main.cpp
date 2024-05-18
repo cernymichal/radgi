@@ -69,7 +69,7 @@ int main(int argc, char* argv[]) {
 
 // #define OUTPUT_PATCH_GEOMETRY
 #ifdef OUTPUT_PATCH_GEOMETRY
-    saveMesh("patches.obj", scene.createPatchGeometry());
+    saveMesh("patches.obj", scene->createPatchGeometry());
 #endif
 
     Ref<IGISolver> solver;

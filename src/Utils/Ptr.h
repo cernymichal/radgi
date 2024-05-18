@@ -60,6 +60,6 @@ struct TypeIdentity {
  * @brief Implicitly casts a value to a different type.
  */
 template <typename T>
-constexpr inline T implicitCast(typename TypeIdentity<T>::type x) noexcept {
+constexpr inline T implicit_cast(typename TypeIdentity<T>::type x) noexcept {
     return x;
 }

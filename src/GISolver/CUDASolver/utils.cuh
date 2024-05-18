@@ -44,9 +44,6 @@ __device__ bool intersectsBVH(const Scene& scene, const vec3& rayOrigin, const v
         if (faceId != u32(-1)) {
             const auto& face = scene.faces[faceId];
 
-            if (glm::dot(rayDirection, face.normal) >= 0)
-                continue;
-
             auto t = rayTriangleIntersection(rayOrigin, rayDirection, face.vertices);
 
             if (!isnan(t) && tInterval.contains(t) && faceId != excludedFaces[0] && faceId != excludedFaces[1])
@@ -58,9 +55,7 @@ __device__ bool intersectsBVH(const Scene& scene, const vec3& rayOrigin, const v
         if (node >= scene.bvh.nodeCount / 2)  // Leaf node
             continue;
 
-        auto intersections = rayAABBintersection(rayOrigin, rayDirectionInv, scene.bvh.nodes[node].aabb);
-        auto tNear = intersections.first;
-        auto tFar = intersections.second;
+        auto [tNear, tFar] = rayAABBintersection(rayOrigin, rayDirectionInv, scene.bvh.nodes[node].aabb);
         if (isnan(tNear) || tNear > tInterval.max || tFar < tInterval.min)
             continue;
 

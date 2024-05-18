@@ -157,21 +157,23 @@ inline T randomNormal() {
     // https://en.wikipedia.org/wiki/Box%E2%80%93Muller_transform
     // faster than ratio of uniforms :( but ziggurat might be faster
 
+    static_assert(std::is_floating_point_v<T>, "Only floating-point types are supported.");
+
     thread_local std::pair<T, bool> cache(0, false);  // {cached value, valid}
     if (cache.second) {
         cache.second = false;
         return cache.first;
     }
 
-    f64 u1, u2;
+    T u1, u2;
     do {
         u1 = random<T>();
     } while (u1 == 0);
     u2 = random<T>();
 
-    auto mag = 1 * sqrt(-2.0 * log(u1));
-    auto z0 = mag * cos(TWO_PI * u2);
-    auto z1 = mag * sin(TWO_PI * u2);
+    T mag = 1 * sqrt(-2 * log(u1));
+    T z0 = mag * cos(2 * pi_v<T> * u2);
+    T z1 = mag * sin(2 * pi_v<T> * u2);
 
     cache = {z1, true};
     return z0;
