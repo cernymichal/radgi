@@ -12,7 +12,6 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 
-#define MATH_CONSTEXPR
 #define MATH_FUNC_QUALIFIER __device__ __host__
 
 #define GLM_FORCE_CUDA
@@ -20,7 +19,6 @@
 #else
 
 #define MATH_FUNC_QUALIFIER
-#define MATH_CONSTEXPR constexpr
 
 #endif
 
@@ -54,7 +52,7 @@ using glm::vec4;
 namespace glm {
 
 template <typename T, glm::qualifier Q>
-MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline T cross(const glm::vec<2, T, Q>& a, const glm::vec<2, T, Q>& b) {
+MATH_FUNC_QUALIFIER constexpr inline T cross(const glm::vec<2, T, Q>& a, const glm::vec<2, T, Q>& b) {
     return a.x * b.y - a.y * b.x;
 }
 
@@ -64,7 +62,7 @@ MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline T cross(const glm::vec<2, T, Q>& a, co
  * @param v The incoming vector
  * @param normal The normal vector
  */
-MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline vec3 reflect(const vec3& v, const vec3& normal) {
+MATH_FUNC_QUALIFIER GLM_CONSTEXPR inline vec3 reflect(const vec3& v, const vec3& normal) {
     return v - 2.0f * glm::dot(v, normal) * normal;
 }
 
@@ -90,7 +88,7 @@ MATH_FUNC_QUALIFIER inline vec3 refract(const vec3& v, const vec3& normal, f32 r
  *
  * @note If the lines are parallel, the result is undefined
  */
-MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline vec2 lineIntersection(const vec2& aOrigin, const vec2& aDirection, const vec2& bOrigin, const vec2& bDirection) {
+MATH_FUNC_QUALIFIER GLM_CONSTEXPR inline vec2 lineIntersection(const vec2& aOrigin, const vec2& aDirection, const vec2& bOrigin, const vec2& bDirection) {
     // X = aOrigin + aDirection * t
     // X = bOrigin + bDirection * u
 
@@ -107,7 +105,7 @@ MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline vec2 lineIntersection(const vec2& aOri
  *
  * @note back facing triangles are not intersected
  */
-MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline f32 rayTriangleIntersection(const vec3& rayOrigin, const vec3& rayDirection, const std::array<vec3, 3>& vertices) {
+MATH_FUNC_QUALIFIER GLM_CONSTEXPR inline f32 rayTriangleIntersection(const vec3& rayOrigin, const vec3& rayDirection, const std::array<vec3, 3>& vertices) {
     // X = rayOrigin + rayDirection * t
 
     // Möller–Trumbore intersection algorithm
@@ -153,37 +151,37 @@ MATH_FUNC_QUALIFIER inline f32 reflectance(f32 cosine, f32 refractionRatio) {
 // Comparison operators for vectors
 
 template <int L, typename T, glm::qualifier Q>
-MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline glm::vec<L, bool> operator!(const glm::vec<L, T, Q>& v) {
+MATH_FUNC_QUALIFIER constexpr inline glm::vec<L, bool> operator!(const glm::vec<L, T, Q>& v) {
     return glm::not_(v);
 }
 
 template <int L, typename T, glm::qualifier Q>
-MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline glm::vec<L, bool> operator==(const glm::vec<L, T, Q>& a, const glm::vec<L, T, Q>& b) {
+MATH_FUNC_QUALIFIER constexpr inline glm::vec<L, bool> operator==(const glm::vec<L, T, Q>& a, const glm::vec<L, T, Q>& b) {
     return glm::equal(a, b);
 }
 
 template <int L, typename T, glm::qualifier Q>
-MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline glm::vec<L, bool> operator!=(const glm::vec<L, T, Q>& a, const glm::vec<L, T, Q>& b) {
+MATH_FUNC_QUALIFIER constexpr inline glm::vec<L, bool> operator!=(const glm::vec<L, T, Q>& a, const glm::vec<L, T, Q>& b) {
     return glm::notEqual(a, b);
 }
 
 template <int L, typename T, glm::qualifier Q>
-MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline glm::vec<L, bool> operator>(const glm::vec<L, T, Q>& a, const glm::vec<L, T, Q>& b) {
+MATH_FUNC_QUALIFIER constexpr inline glm::vec<L, bool> operator>(const glm::vec<L, T, Q>& a, const glm::vec<L, T, Q>& b) {
     return glm::greaterThan(a, b);
 }
 
 template <int L, typename T, glm::qualifier Q>
-MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline glm::vec<L, bool> operator>=(const glm::vec<L, T, Q>& a, const glm::vec<L, T, Q>& b) {
+MATH_FUNC_QUALIFIER constexpr inline glm::vec<L, bool> operator>=(const glm::vec<L, T, Q>& a, const glm::vec<L, T, Q>& b) {
     return glm::greaterThanEqual(a, b);
 }
 
 template <int L, typename T, glm::qualifier Q>
-MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline glm::vec<L, bool> operator<(const glm::vec<L, T, Q>& a, const glm::vec<L, T, Q>& b) {
+MATH_FUNC_QUALIFIER constexpr inline glm::vec<L, bool> operator<(const glm::vec<L, T, Q>& a, const glm::vec<L, T, Q>& b) {
     return glm::lessThan(a, b);
 }
 
 template <int L, typename T, glm::qualifier Q>
-MATH_CONSTEXPR MATH_FUNC_QUALIFIER glm::vec<L, bool> operator<=(const glm::vec<L, T, Q>& a, const glm::vec<L, T, Q>& b) {
+MATH_FUNC_QUALIFIER constexpr glm::vec<L, bool> operator<=(const glm::vec<L, T, Q>& a, const glm::vec<L, T, Q>& b) {
     return glm::lessThanEqual(a, b);
 }
 
@@ -212,22 +210,22 @@ template <typename T>
 struct Interval {
     T min, max;
 
-    MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline Interval() = default;
+    MATH_FUNC_QUALIFIER constexpr inline Interval() = default;
 
-    MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline Interval(T min, T max) : min(min), max(max) {}
+    MATH_FUNC_QUALIFIER constexpr inline Interval(T min, T max) : min(min), max(max) {}
 
-    MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline T length() const {
+    MATH_FUNC_QUALIFIER constexpr inline T length() const {
         return max - min;
     }
 
-    MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline T center() const {
+    MATH_FUNC_QUALIFIER constexpr inline T center() const {
         if constexpr (std::is_same_v<T, f32> || std::is_same_v<T, vec3>)
             return (min + max) / 2.0f;
         else
             return (min + max) / 2;
     }
 
-    MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline bool contains(T value) const {
+    MATH_FUNC_QUALIFIER constexpr inline bool contains(T value) const {
         auto result = value >= min && value <= max;
 
         if constexpr (std::is_same_v<T, vec3>)
@@ -236,7 +234,7 @@ struct Interval {
             return result;
     }
 
-    MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline bool surrounds(T value) const {
+    MATH_FUNC_QUALIFIER constexpr inline bool surrounds(T value) const {
         auto result = value > min && value < max;
 
         if constexpr (std::is_same_v<T, vec3>)
@@ -245,7 +243,7 @@ struct Interval {
             return result;
     }
 
-    MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline bool intersects(const Interval& other) const {
+    MATH_FUNC_QUALIFIER constexpr inline bool intersects(const Interval& other) const {
         auto result = min <= other.max && max >= other.min;
 
         if constexpr (std::is_same_v<T, vec3>)
@@ -254,27 +252,27 @@ struct Interval {
             return result;
     }
 
-    MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline Interval intersection(const Interval& other) const {
+    MATH_FUNC_QUALIFIER constexpr inline Interval intersection(const Interval& other) const {
         return {glm::max(min, other.min), glm::min(max, other.max)};
     }
 
-    MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline Interval boundingUnion(const Interval& other) const {
+    MATH_FUNC_QUALIFIER constexpr inline Interval boundingUnion(const Interval& other) const {
         return {glm::min(min, other.min), glm::max(max, other.max)};
     }
 
-    MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline Interval expand(T padding) const {
+    MATH_FUNC_QUALIFIER constexpr inline Interval expand(T padding) const {
         return Interval(min - padding, max + padding);
     }
 
-    MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline T clamp(T value) const {
+    MATH_FUNC_QUALIFIER constexpr inline T clamp(T value) const {
         return glm::clamp(value, min, max);
     }
 
-    MATH_CONSTEXPR MATH_FUNC_QUALIFIER static inline Interval<T> empty() {
+    MATH_FUNC_QUALIFIER constexpr static inline Interval<T> empty() {
         return {std::numeric_limits<T>::max(), std::numeric_limits<T>::lowest()};
     }
 
-    MATH_CONSTEXPR MATH_FUNC_QUALIFIER static inline Interval<T> universe() {
+    MATH_FUNC_QUALIFIER constexpr static inline Interval<T> universe() {
         return {std::numeric_limits<T>::lowest(), std::numeric_limits<T>::max()};
     }
 };
@@ -283,12 +281,12 @@ struct Interval {
 using AABB = Interval<vec3>;
 
 template <>
-MATH_CONSTEXPR inline Interval<vec3> Interval<vec3>::empty() {
+constexpr inline Interval<vec3> Interval<vec3>::empty() {
     return {vec3(std::numeric_limits<f32>::max()), vec3(std::numeric_limits<f32>::lowest())};
 }
 
 template <>
-MATH_CONSTEXPR inline Interval<vec3> Interval<vec3>::universe() {
+constexpr inline Interval<vec3> Interval<vec3>::universe() {
     return {vec3(std::numeric_limits<f32>::lowest()), vec3(std::numeric_limits<f32>::max())};
 }
 
@@ -298,7 +296,7 @@ MATH_CONSTEXPR inline Interval<vec3> Interval<vec3>::universe() {
  * @param box The AABB to check against
  * @return The tNear and tFar values of the intersection points along the ray, or NANs if there is no intersection
  */
-MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline std::pair<f32, f32> rayAABBintersection(const vec3& rayOrigin, const vec3& rayDirectionInv, const AABB& box) {
+MATH_FUNC_QUALIFIER GLM_CONSTEXPR inline std::pair<f32, f32> rayAABBintersection(const vec3& rayOrigin, const vec3& rayDirectionInv, const AABB& box) {
     // https://tavianator.com/2011/ray_box.html
     // https://gist.github.com/DomNomNom/46bb1ce47f68d255fd5d
 
@@ -315,5 +313,4 @@ MATH_CONSTEXPR MATH_FUNC_QUALIFIER inline std::pair<f32, f32> rayAABBintersectio
     return {tNear, tFar};
 };
 
-#undef MATH_CONSTEXPR
 #undef MATH_FUNC_QUALIFIER

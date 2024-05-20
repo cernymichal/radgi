@@ -13,7 +13,7 @@ struct Patch {
     Patch() = default;
 
     Patch(u8 vertexCount, const std::array<vec3, 4>& vertices, Face* face) : vertices(vertices), vertexCount(vertexCount), face(face) {
-        // TODO - this is not correct for general quads
+        // TODO - this is not correct for general quads - https://en.wikipedia.org/wiki/Shoelace_formula
         area = glm::length(glm::cross(vertices[1] - vertices[0], vertices[2] - vertices[1]));
         if (vertexCount == 3)
             area /= 2;
