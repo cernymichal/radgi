@@ -30,13 +30,13 @@ struct SplitMix64 {
     constexpr inline u64 operator()() {
         // https://prng.di.unimi.it/splitmix64.c
 
-        state += 0x9e3779b97f4a7c15Ui64;
+        state += 0x9e3779b97f4a7c15ULL;
 
         u64 z = state;
         z ^= z >> 30;
-        z *= 0xbf58476d1ce4e5b9Ui64;
+        z *= 0xbf58476d1ce4e5b9ULL;
         z ^= z >> 27;
-        z *= 0x94d049bb133111ebUi64;
+        z *= 0x94d049bb133111ebULL;
         z ^= z >> 31;
 
         return z;

@@ -2,26 +2,35 @@
   "version": 3,
   "configurePresets": [
     {
-      "name": "windows-base",
+      "name": "common-base",
       "hidden": true,
-      "generator": "Ninja",
       "binaryDir": "${sourceDir}/out/build/${presetName}",
       "installDir": "${sourceDir}/out/install/${presetName}",
       "cacheVariables": {
-        "CMAKE_C_COMPILER": "cl.exe",
-        "CMAKE_CXX_COMPILER": "cl.exe",
-        "CMAKE_TOOLCHAIN_FILE": "%VCPKG_ROOT%/scripts/buildsystems/vcpkg.cmake",
         "VCPKG_LIBRARY_LINKAGE": "static",
-        "VCPKG_CRT_LINKAGE": "dynamic"
-      },
+        "VCPKG_CRT_LINKAGE": "dynamic",
+        "CMAKE_CUDA_RUNTIME_LIBRARY": "static",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+      }
+    },
+    {
+      "name": "windows-base",
+      "hidden": true,
+      "inherits": "common-base",
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",
         "rhs": "Windows"
+      },
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "cl.exe",
+        "CMAKE_CXX_COMPILER": "cl.exe",
+        "CMAKE_CUDA_COMPILER": "nvcc"
       }
     },
     {
-      "name": "x64-debug",
+      "name": "windows-x64-debug",
       "displayName": "x64 Debug",
       "inherits": "windows-base",
       "architecture": {
@@ -33,12 +42,107 @@
       }
     },
     {
-      "name": "x64-release",
+      "name": "windows-x64-release",
       "displayName": "x64 Release",
-      "inherits": "x64-debug",
+      "inherits": "windows-base",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       }
+    },
+    {
+      "name": "linux-base",
+      "hidden": true,
+      "inherits": "common-base",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "generator": "Unix Makefiles",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++-13",
+        "CMAKE_CUDA_COMPILER": "nvcc",
+        "CMAKE_CUDA_HOST_COMPILER": "g++-13",
+        "CUDAHOSTCXX": "g++-13"
+      },
+      "vendor": {
+        "microsoft.com/VisualStudioSettings/CMake/1.0": {
+          "hostOS": ["Linux"]
+        },
+        "microsoft.com/VisualStudioRemoteSettings/CMake/1.0": {
+          "sourceDir": "$env{HOME}/.vs/$ms{projectDirName}"
+        }
+      }
+    },
+    {
+      "name": "linux-x64-debug",
+      "displayName": "x64 Debug",
+      "inherits": "linux-base",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "linux-x64-release",
+      "displayName": "x64 Release",
+      "inherits": "linux-base",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "common-base",
+      "hidden": true,
+      "cleanFirst": false
+    },
+    {
+      "name": "linux-base",
+      "inherits": "common-base",
+      "hidden": true
+    },
+    {
+      "name": "linux-x64-release",
+      "inherits": "linux-base",
+      "displayName": "x64 Release",
+      "configurePreset": "linux-x64-release"
+    },
+    {
+      "name": "linux-x64-debug",
+      "inherits": "linux-base",
+      "displayName": "x64 Debug",
+      "configurePreset": "linux-x64-debug"
+    },
+    {
+      "name": "windows-base",
+      "inherits": "common-base",
+      "hidden": true
+    },
+    {
+      "name": "windows-x64-debug",
+      "inherits": "windows-base",
+      "displayName": "x64 Debug",
+      "configurePreset": "windows-x64-debug"
+    },
+    {
+      "name": "windows-x64-release",
+      "inherits": "windows-base",
+      "displayName": "x64 Release",
+      "configurePreset": "windows-x64-release"
     }
   ]
 }

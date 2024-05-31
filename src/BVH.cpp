@@ -28,7 +28,7 @@ bool BVH::intersects(const vec3& rayOrigin, const vec3& rayDirection, const Inte
 
             auto t = rayTriangleIntersection(rayOrigin, rayDirection, face.vertices);
 
-            if (!isnan(t) && tInterval.contains(t) && hitPredicate(t, m_faces[faceId]))
+            if (!std::isnan(t) && tInterval.contains(t) && hitPredicate(t, m_faces[faceId]))
                 return true;
 
             continue;
@@ -38,7 +38,7 @@ bool BVH::intersects(const vec3& rayOrigin, const vec3& rayDirection, const Inte
             continue;
 
         auto [tNear, tFar] = rayAABBintersection(rayOrigin, rayDirectionInv, m_nodes[node].aabb);
-        if (isnan(tNear) || tNear > tInterval.max || tFar < tInterval.min)
+        if (std::isnan(tNear) || tNear > tInterval.max || tFar < tInterval.min)
             continue;
 
         auto leftChild = 2 * node + 1;

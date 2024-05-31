@@ -108,7 +108,7 @@ MATH_FUNC_QUALIFIER GLM_CONSTEXPR inline vec2 lineIntersection(const vec2& aOrig
 MATH_FUNC_QUALIFIER GLM_CONSTEXPR inline f32 rayTriangleIntersection(const vec3& rayOrigin, const vec3& rayDirection, const std::array<vec3, 3>& vertices) {
     // X = rayOrigin + rayDirection * t
 
-    // Möller–Trumbore intersection algorithm
+    // Mï¿½llerï¿½Trumbore intersection algorithm
     auto edge1 = vertices[1] - vertices[0];
     auto edge2 = vertices[2] - vertices[0];
     auto P = glm::cross(rayDirection, edge2);
