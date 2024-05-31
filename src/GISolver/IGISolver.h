@@ -11,7 +11,7 @@ public:
         m_lightmapSize = m_scene->lightmapSize();
     }
 
-    virtual Texture<vec3> solve() abstract;
+    virtual Texture<vec3> solve() = 0;
 
 protected:
     Ref<const Scene> m_scene = nullptr;

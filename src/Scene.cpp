@@ -98,9 +98,6 @@ static std::tuple<std::array<vec2, 4>, u8> faceTexelIntersection(const Face& fac
 void Scene::createPatches() {
     m_patches = Texture<Patch>(m_lightmapSize);
 
-    auto maxResiduePatch = uvec2(0, 0);
-    f32 maxResidue2 = 0;  // squared magnitude
-
     // rasterize the scene faces into the lightmap
     auto texelSize = 1.0f / vec2(m_patches.size());
     for (auto& face : m_faces) {

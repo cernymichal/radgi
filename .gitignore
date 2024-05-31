@@ -1,4 +1,4 @@
-vcpkg_installed
+out/
 output.exr
 patches.obj
 

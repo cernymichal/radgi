@@ -29,7 +29,7 @@ f32 calculateFormFactor(const Patch& patchA, const Patch& patchB, const Scene& s
 
 #define USE_BVH
 #ifdef USE_BVH
-        auto intersectionPredicate = [&](f32 t, const Face& face) {
+        auto intersectionPredicate = [&](f32, const Face& face) {
             return face != *patchA.face && face != *patchB.face;
         };
         bool hit = scene.bvh().intersects(rayOrigin, rayDirection, tInterval, intersectionPredicate);

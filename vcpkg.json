@@ -1,11 +1,24 @@
 {
-  "name": "longweekend",
-  "version-string": "0.1.0",
   "dependencies": [
-    "glm",
-    "miniz",
-    "tinyexr",
-    "tinyobjloader",
-    "argh"
+    {
+      "name": "glm",
+      "version>=": "1.0.1"
+    },
+    {
+      "name": "miniz",
+      "version>=": "3.0.2"
+    },
+    {
+      "name": "tinyexr",
+      "version>=": "1.0.8"
+    },
+    {
+      "name": "tinyobjloader",
+      "version>=": "2.0.0rc13"
+    },
+    {
+      "name": "argh",
+      "version>=": "1.3.2"
+    }
   ]
 }
