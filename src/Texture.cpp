@@ -21,7 +21,7 @@ Texture<T>::Texture(const std::filesystem::path& filePath, bool flipVertically) 
     std::string pathString = filePath.string();
     LOG("Loading texture " << pathString);
 
-    int channelsToLoad = 3;
+    u32 channelsToLoad = 3;
     if constexpr (std::is_same_v<T, f32>)
         channelsToLoad = 1;
     else if constexpr (std::is_same_v<T, vec2>)
@@ -34,7 +34,7 @@ Texture<T>::Texture(const std::filesystem::path& filePath, bool flipVertically) 
         assert(false);
 
     EXRVersion version;
-    int status = ParseEXRVersionFromFile(&version, pathString.c_str());
+    i32 status = ParseEXRVersionFromFile(&version, pathString.c_str());
     if (status != TINYEXR_SUCCESS || version.multipart) {
         LOG("Invalid EXR file");
         throw std::runtime_error("Invalid EXR file");
@@ -58,7 +58,7 @@ Texture<T>::Texture(const std::filesystem::path& filePath, bool flipVertically) 
     }
 
     // Read HALF channel as f32.
-    for (int i = 0; i < header.num_channels; i++) {
+    for (u32 i = 0; i < header.num_channels; i++) {
         if (header.pixel_types[i] == TINYEXR_PIXELTYPE_HALF)
             header.requested_pixel_types[i] = TINYEXR_PIXELTYPE_FLOAT;
     }
@@ -79,7 +79,7 @@ Texture<T>::Texture(const std::filesystem::path& filePath, bool flipVertically) 
 
     // Load the image data to a single array, flipping it vertically if necessary
     f32* dataf32 = reinterpret_cast<f32*>(m_data);
-    for (int channel = 0; channel < channelsToLoad; channel++) {
+    for (u32 channel = 0; channel < channelsToLoad; channel++) {
         auto idx = uvec2(0);
         for (idx.y = 0; idx.y < m_size.y; idx.y++) {
             for (idx.x = 0; idx.x < m_size.x; idx.x++) {
@@ -110,7 +110,7 @@ void Texture<T>::save(const std::filesystem::path& filePath, bool flipVertically
     std::string pathString = filePath.string();
     LOG("Saving texture " << pathString);
 
-    int channelsToSave = 1;
+    u32 channelsToSave = 1;
     if constexpr (std::is_same_v<T, f32>)
         channelsToSave = 1;
     else if constexpr (std::is_same_v<T, vec2>)
@@ -129,7 +129,7 @@ void Texture<T>::save(const std::filesystem::path& filePath, bool flipVertically
     InitEXRImage(&image);
 
     std::vector<f32*> images;
-    for (int i = 0; i < channelsToSave; i++)
+    for (u32 i = 0; i < channelsToSave; i++)
         images.push_back(new f32[m_size.x * m_size.y]);
 
     f32* const dataf32 = reinterpret_cast<f32* const>(m_data);
@@ -138,7 +138,7 @@ void Texture<T>::save(const std::filesystem::path& filePath, bool flipVertically
         for (idx.x = 0; idx.x < m_size.x; idx.x++) {
             auto i = idx.y * m_size.x + idx.x;
             auto flippedI = (flipVertically ? m_size.y - 1 - idx.y : idx.y) * m_size.x + idx.x;
-            for (int channel = 0; channel < channelsToSave; channel++)
+            for (u32 channel = 0; channel < channelsToSave; channel++)
                 images[channel][flippedI] = dataf32[i * channelsToSave + channel];
         }
     }
@@ -154,17 +154,17 @@ void Texture<T>::save(const std::filesystem::path& filePath, bool flipVertically
 
     std::vector<EXRChannelInfo> channels(channelsToSave, EXRChannelInfo());
     const char* channelNames[] = {"B", "G", "R", "A"};
-    for (int i = 0; i < channelsToSave; i++) {
+    for (u32 i = 0; i < channelsToSave; i++) {
         auto nameLength = strlen(channelNames[i]);
-        for (int j = 0; j < nameLength; j++)
+        for (u32 j = 0; j < nameLength; j++)
             channels[i].name[j] = channelNames[i][j];
         channels[i].name[nameLength] = '\0';
     }
     if (channelsToSave < 3)
         header.channels[0].name[0] = 'R';
 
-    std::vector<int> pixelTypes(channelsToSave, TINYEXR_PIXELTYPE_FLOAT);
-    std::vector<int> requestedPixelTypes(channelsToSave, TINYEXR_PIXELTYPE_FLOAT);  // could be HALF
+    std::vector<i32> pixelTypes(channelsToSave, TINYEXR_PIXELTYPE_FLOAT);
+    std::vector<i32> requestedPixelTypes(channelsToSave, TINYEXR_PIXELTYPE_FLOAT);  // could be HALF
 
     header.channels = channels.data();
     header.num_channels = image.num_channels;
@@ -173,9 +173,9 @@ void Texture<T>::save(const std::filesystem::path& filePath, bool flipVertically
     header.compression_type = TINYEXR_COMPRESSIONTYPE_ZIP;  // TINYEXR_COMPRESSIONTYPE_PIZ;
 
     const char* error;
-    int status = SaveEXRImageToFile(&image, &header, pathString.c_str(), &error);
+    i32 status = SaveEXRImageToFile(&image, &header, pathString.c_str(), &error);
 
-    for (int i = 0; i < images.size(); i++)
+    for (i32 i = 0; i < images.size(); i++)
         delete[] images[i];
 
     if (status != TINYEXR_SUCCESS) {

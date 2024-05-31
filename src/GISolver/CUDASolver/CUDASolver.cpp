@@ -13,7 +13,7 @@ void CUDASolver::initialize(const Ref<const Scene>& scene) {
     // cudaHostAlloc
     // https://stackoverflow.com/questions/14807192/can-i-use-an-stdvector-as-a-facade-for-a-pre-allocated-raw-array
 
-    m_lightmapSize = {static_cast<int>(scene->lightmapSize().x), static_cast<int>(scene->lightmapSize().y)};
+    m_lightmapSize = scene->lightmapSize();
 
     std::unordered_map<Ref<Material>, u16> materialIndices;
     m_materials.reserve(m_scene->materials().size());

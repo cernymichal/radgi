@@ -13,6 +13,7 @@ project("radgi" LANGUAGES CXX CUDA)
 add_executable(${PROJECT_NAME})
 
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${PROJECT_NAME})
+set_target_properties(${PROJECT_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
 # CXX
 set_target_properties(${PROJECT_NAME} PROPERTIES 
@@ -31,7 +32,7 @@ if (MSVC)
 else()
 	target_compile_options(${PROJECT_NAME} PRIVATE
         $<$<COMPILE_LANGUAGE:CXX>:
-            -Wall -Wextra -pedantic
+            -Wall -Wextra -pedantic -Wno-sign-compare -Wno-unused-parameter
             -fopenmp # OpenMP support
         >)
 endif()

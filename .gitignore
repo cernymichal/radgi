@@ -4,7 +4,6 @@ patches.obj
 *.blend?
 *.blend?.meta
 
-Makefile
 [Oo]ut/
 .vscode/
 

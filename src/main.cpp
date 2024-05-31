@@ -33,7 +33,7 @@ Options:
 Example:
 	radgi resources/cornell_box/cornell_box.obj -o lightmap.exr -r 256 -t 0.01)";
 
-int main(int argc, char* argv[]) {
+i32 main(i32 argc, char* argv[]) {
     argh::parser cmdl(argc, argv, argh::parser::PREFER_PARAM_FOR_UNREG_OPTION);
 
     if (!cmdl(1) || cmdl[{"-h", "--help"}]) {

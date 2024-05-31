@@ -8,7 +8,7 @@ using namespace CUDAStructs;
 #define checkCUDAError(ans) \
     { logCUDAError((ans), __FILE__, __LINE__); }
 
-inline void logCUDAError(cudaError_t code, const char* file, int line) {
+inline void logCUDAError(cudaError_t code, const char* file, i32 line) {
     if (code != cudaSuccess)
         fprintf(stderr, "CUDA error: %s %s %d\n", cudaGetErrorString(code), file, line);
 }

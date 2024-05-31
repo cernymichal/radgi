@@ -76,7 +76,6 @@ std::vector<Face> loadMesh(const std::filesystem::path& filePath) {
 void saveMesh(const std::filesystem::path& filePath, const std::vector<Face>& faces) {
     auto file = std::ofstream(filePath);
 
-    auto patchIdx = uvec2(0, 0);
     auto vertexI = 1;
     for (auto& face : faces) {
         for (u32 i = 0; i < 3; i++) {

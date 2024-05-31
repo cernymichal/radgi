@@ -176,8 +176,8 @@ void Scene::dilateLightmap(Texture<vec3>& lightmap, u32 radius) {
     Texture<bool> dilatedThisStep(m_lightmapSize);
     for (u32 i = 0; i < radius; i++) {
         dilatedThisStep.clear(false);
-        for (u32 y = 0; y < m_lightmapSize.y; y++) {
-            for (u32 x = 0; x < m_lightmapSize.x; x++) {
+        for (i32 y = 0; y < m_lightmapSize.y; y++) {
+            for (i32 x = 0; x < m_lightmapSize.x; x++) {
                 auto idx = uvec2(x, y);
 
                 if (m_patches[idx].face != nullptr)
