@@ -4,13 +4,27 @@
 #include "Utils/Math.h"
 #include "Utils/Scalars.h"
 
+#ifdef __CUDACC__
+
+#include <cuda_fp16.h>
+typedef half f16;
+
+#else
+
+#include <fp16.h>
+typedef u16 f16;
+
+#endif  // __CUDACC__
+
+typedef glm::vec<3, f16> hvec3;
+
 namespace CUDAStructs {
 
 constexpr u32 NULL_ID = u32(-1);
 
 struct Material {
-    vec3 albedo;
-    vec3 emission;
+    hvec3 albedo;
+    hvec3 emission;
 };
 
 struct Face {
@@ -26,7 +40,7 @@ struct Face {
 struct Patch {
     std::array<vec3, 4> vertices;
     u8 vertexCount;
-    f32 area;
+    f16 area;
     u32 faceId;
 
     bool operator==(const Patch& other) const {
@@ -36,7 +50,7 @@ struct Patch {
 
 struct BVH {
     struct Node {
-        AABB aabb;
+        AABB aabb = AABB::empty();
         u32 face = u32(-1);
     };
 

@@ -15,7 +15,7 @@ public:
 
 protected:
     Ref<const Scene> m_scene = nullptr;
-    uvec2 m_lightmapSize;
+    uvec2 m_lightmapSize = uvec2(0);
 
     IGISolver() = default;
 };

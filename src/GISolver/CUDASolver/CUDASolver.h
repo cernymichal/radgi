@@ -14,7 +14,7 @@ public:
 
 protected:
     u32 m_bounces;
-    uvec2 m_lightmapSize;
+    uvec2 m_lightmapSize = uvec2(0);
     std::vector<CUDAStructs::Material> m_materials;
     std::vector<CUDAStructs::Face> m_faces;
     std::vector<CUDAStructs::Patch> m_patches;

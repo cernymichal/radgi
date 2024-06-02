@@ -66,13 +66,13 @@ __device__ f32 calculateFormFactor(const Patch& patchA, const Patch& patchB, con
     return F / rayCount;
 }
 
-__device__ __forceinline__ void atomicAdd(vec3* target, const vec3& value) {
+__device__ __forceinline__ void atomicAdd(hvec3* target, const hvec3& value) {
     atomicAdd(&target->x, value.x);
     atomicAdd(&target->y, value.y);
     atomicAdd(&target->z, value.z);
 }
 
-__global__ void gather(const uvec2 lightmapSize, vec3* lightmap, const vec3* residues, vec3* nextResidues, const Scene scene, const u32 rngSeed, u32 threadQuota) {
+__global__ void gather(const uvec2 lightmapSize, hvec3* lightmap, const hvec3* residues, hvec3* nextResidues, const Scene scene, const u32 rngSeed, u32 threadQuota) {
     u64 threadId = blockIdx.x * blockDim.x + threadIdx.x;
     u64 patchCount = lightmapSize.x * lightmapSize.y;
 
@@ -102,9 +102,9 @@ __global__ void gather(const uvec2 lightmapSize, vec3* lightmap, const vec3* res
         if (patchA.faceId == NULL_ID || patchB.faceId == NULL_ID)
             continue;
 
-        vec3 patchAResidue = residues[patchPair.x];
-        vec3 patchBResidue = residues[patchPair.y];
-        if (patchAResidue == vec3(0) && patchBResidue == vec3(0))
+        hvec3 patchAResidue = residues[patchPair.x];
+        hvec3 patchBResidue = residues[patchPair.y];
+        if (patchAResidue == hvec3(0) && patchBResidue == hvec3(0))
             continue;
 
         // check if the patches are facing each other
@@ -112,8 +112,8 @@ __global__ void gather(const uvec2 lightmapSize, vec3* lightmap, const vec3* res
         if (glm::dot(sightLine, scene.faces[patchA.faceId].normal) <= 0 || glm::dot(-sightLine, scene.faces[patchB.faceId].normal) <= 0)
             continue;
 
-        auto F = calculateFormFactor(patchA, patchB, scene, rng);
-        if (F == 0)
+        f16 F = calculateFormFactor(patchA, patchB, scene, rng);
+        if (F <= static_cast<f16>(0.0001f))
             continue;
 
         auto deltaRadA = scene.materials[scene.faces[patchA.faceId].materialId].albedo * patchBResidue * F * patchB.area;
@@ -126,7 +126,7 @@ __global__ void gather(const uvec2 lightmapSize, vec3* lightmap, const vec3* res
     }
 }
 
-__global__ void initTextures(uvec2 lightmapSize, vec3* lightmap, vec3* residues, vec3* nextResidues, const Scene scene) {
+__global__ void initTextures(uvec2 lightmapSize, hvec3* lightmap, hvec3* residues, hvec3* nextResidues, const Scene scene) {
     auto texelST = uvec2(blockIdx.x * blockDim.x + threadIdx.x, blockIdx.y * blockDim.y + threadIdx.y);
     if (texelST.x >= lightmapSize.x || texelST.y >= lightmapSize.y)
         return;
@@ -134,18 +134,18 @@ __global__ void initTextures(uvec2 lightmapSize, vec3* lightmap, vec3* residues,
     auto patchIdx = texelST.y * lightmapSize.x + texelST.x;
     auto& patch = scene.patches[patchIdx];
 
-    vec3 residue;
+    hvec3 residue;
     if (patch.faceId != NULL_ID)
         residue = scene.materials[scene.faces[patch.faceId].materialId].emission;
     else
-        residue = vec3(0);
+        residue = hvec3(0);
 
     lightmap[patchIdx] = residue;
     residues[patchIdx] = residue;
-    nextResidues[patchIdx] = vec3(0);
+    nextResidues[patchIdx] = hvec3(0);
 }
 
-extern "C" vec3* solveRadiosityCUDA(u32 bounces, uvec2 lightmapSize, const Scene& sceneHost) {
+extern "C" hvec3* solveRadiosityCUDA(u32 bounces, uvec2 lightmapSize, const Scene& sceneHost) {
     Scene sceneDevice = sceneHost;
 
     // upload scene data to the device
@@ -162,14 +162,14 @@ extern "C" vec3* solveRadiosityCUDA(u32 bounces, uvec2 lightmapSize, const Scene
     cudaMemcpy(sceneDevice.bvh.nodes, sceneHost.bvh.nodes, sceneHost.bvh.nodeCount * sizeof(BVH::Node), cudaMemcpyHostToDevice);
 
     // allocate work buffers
-    vec3* nextResiduesDevice;
-    cudaMalloc(&nextResiduesDevice, lightmapSize.x * lightmapSize.y * sizeof(vec3));
+    hvec3* lightmapDevice;
+    cudaMalloc(&lightmapDevice, lightmapSize.x * lightmapSize.y * sizeof(hvec3));
 
-    vec3* lightmapDevice;
-    cudaMalloc(&lightmapDevice, lightmapSize.x * lightmapSize.y * sizeof(vec3));
+    hvec3* residuesDevice;
+    cudaMalloc(&residuesDevice, lightmapSize.x * lightmapSize.y * sizeof(hvec3));
 
-    vec3* residuesDevice;
-    cudaMalloc(&residuesDevice, lightmapSize.x * lightmapSize.y * sizeof(vec3));
+    hvec3* nextResiduesDevice;
+    cudaMalloc(&nextResiduesDevice, lightmapSize.x * lightmapSize.y * sizeof(hvec3));
 
     checkCUDAError(cudaDeviceSynchronize());
     checkCUDAError(cudaPeekAtLastError());
@@ -195,14 +195,14 @@ extern "C" vec3* solveRadiosityCUDA(u32 bounces, uvec2 lightmapSize, const Scene
         gather<<<blocks, blockSize>>>(lightmapSize, lightmapDevice, residuesDevice, nextResiduesDevice, sceneDevice, rngSeed, threadQuota);
 
         std::swap(residuesDevice, nextResiduesDevice);
-        cudaMemset(nextResiduesDevice, 0, lightmapSize.x * lightmapSize.y * sizeof(vec3));
+        cudaMemset(nextResiduesDevice, 0, lightmapSize.x * lightmapSize.y * sizeof(hvec3));
     }
     checkCUDAError(cudaDeviceSynchronize());
     checkCUDAError(cudaPeekAtLastError());
 
     // copy lightmap back
-    vec3* lightmapHost = new vec3[lightmapSize.x * lightmapSize.y];
-    cudaMemcpy(lightmapHost, lightmapDevice, lightmapSize.x * lightmapSize.y * sizeof(vec3), cudaMemcpyDeviceToHost);
+    hvec3* lightmapHost = new hvec3[lightmapSize.x * lightmapSize.y];
+    cudaMemcpy(lightmapHost, lightmapDevice, lightmapSize.x * lightmapSize.y * sizeof(hvec3), cudaMemcpyDeviceToHost);
 
     // free everything on the device
     cudaFree(sceneDevice.patches);

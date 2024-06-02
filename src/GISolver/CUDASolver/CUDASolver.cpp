@@ -4,7 +4,15 @@
 
 #include "CUDAStructs.h"
 
-extern "C" vec3* solveRadiosityCUDA(u32 bounces, uvec2 lightmapSize, const CUDAStructs::Scene& sceneHost);
+extern "C" hvec3* solveRadiosityCUDA(u32 bounces, uvec2 lightmapSize, const CUDAStructs::Scene& sceneHost);
+
+static inline hvec3 vec3_to_hvec3(const vec3& v) {
+    return hvec3(fp16_ieee_from_fp32_value(v.x), fp16_ieee_from_fp32_value(v.y), fp16_ieee_from_fp32_value(v.z));
+}
+
+static inline vec3 hvec3_to_vec3(const hvec3& v) {
+    return vec3(fp16_ieee_to_fp32_value(v.x), fp16_ieee_to_fp32_value(v.y), fp16_ieee_to_fp32_value(v.z));
+}
 
 void CUDASolver::initialize(const Ref<const Scene>& scene) {
     IGISolver::initialize(scene);
@@ -22,8 +30,8 @@ void CUDASolver::initialize(const Ref<const Scene>& scene) {
 
         auto& cudaMaterial = m_materials.emplace_back();
         cudaMaterial = {
-            .albedo = material->albedo,
-            .emission = material->emission};
+            .albedo = vec3_to_hvec3(material->albedo),
+            .emission = vec3_to_hvec3(material->emission)};
     }
 
     m_faces.reserve(m_scene->faces().size());
@@ -45,7 +53,7 @@ void CUDASolver::initialize(const Ref<const Scene>& scene) {
             cudaPatch = {
                 .vertices = patch.vertices,
                 .vertexCount = patch.vertexCount,
-                .area = patch.area,
+                .area = fp16_ieee_from_fp32_value(patch.area),
                 .faceId = patch.face != nullptr ? static_cast<u32>(patch.face - m_scene->faces().data()) : CUDAStructs::NULL_ID};
         }
     }
@@ -73,6 +81,13 @@ Texture<vec3> CUDASolver::solve() {
         },
     };
 
-    vec3* lightmap = solveRadiosityCUDA(m_bounces, m_lightmapSize, sceneHost);
-    return Texture<vec3>(m_scene->lightmapSize(), std::move(lightmap));
+    hvec3* f16Lightmap = solveRadiosityCUDA(m_bounces, m_lightmapSize, sceneHost);
+
+    vec3* f32Lightmap = new vec3[m_lightmapSize.x * m_lightmapSize.y];
+    for (u32 i = 0; i < m_lightmapSize.x * m_lightmapSize.y; i++)
+        f32Lightmap[i] = hvec3_to_vec3(f16Lightmap[i]);
+
+    delete[] f16Lightmap;
+
+    return Texture<vec3>(m_scene->lightmapSize(), std::move(f32Lightmap));
 }

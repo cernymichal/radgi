@@ -164,7 +164,7 @@ void Texture<T>::save(const std::filesystem::path& filePath, bool flipVertically
         header.channels[0].name[0] = 'R';
 
     std::vector<i32> pixelTypes(channelsToSave, TINYEXR_PIXELTYPE_FLOAT);
-    std::vector<i32> requestedPixelTypes(channelsToSave, TINYEXR_PIXELTYPE_FLOAT);  // could be HALF
+    std::vector<i32> requestedPixelTypes(channelsToSave, TINYEXR_PIXELTYPE_HALF);
 
     header.channels = channels.data();
     header.num_channels = image.num_channels;

@@ -1,6 +1,10 @@
 {
   "dependencies": [
     {
+      "name": "argh",
+      "version>=": "1.3.2"
+    },
+    {
       "name": "glm",
       "version>=": "1.0.1"
     },
@@ -17,8 +21,8 @@
       "version>=": "2.0.0rc13"
     },
     {
-      "name": "argh",
-      "version>=": "1.3.2"
+      "name": "fp16",
+      "version>=": "2021-02-21#2"
     }
   ]
 }

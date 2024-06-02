@@ -5,7 +5,8 @@ https://en.cppreference.com/w/c/types/integer
 https://en.cppreference.com/w/cpp/language/types
 */
 
-#include <cstdint>
+// TODO C++23 fixed width floating point types
+// #include <stdfloat>
 
 typedef int8_t i8;
 typedef int16_t i16;
@@ -39,4 +40,6 @@ typedef uint_fast64_t u64f;
 
 typedef float f32;
 typedef double f64;
-typedef long double f128;  // Not true for MSVC (:
+#ifdef __SIZEOF_FLOAT128__  // Only 64-bit GCC and Clang
+typedef __float128 f128;
+#endif
