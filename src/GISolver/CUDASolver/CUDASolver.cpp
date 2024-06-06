@@ -6,12 +6,28 @@
 
 extern "C" hvec3* solveRadiosityCUDA(u32 bounces, uvec2 lightmapSize, const CUDAStructs::Scene& sceneHost);
 
+static inline f16 f32_to_f16(const f32& x) {
+#ifdef USE_FP16
+    return fp16_ieee_from_fp32_value(x);
+#else
+    return x;
+#endif
+}
+
+static inline f32 f16_to_f32(const f16& x) {
+#ifdef USE_FP16
+    return fp16_ieee_to_fp32_value(x);
+#else
+    return x;
+#endif
+}
+
 static inline hvec3 vec3_to_hvec3(const vec3& v) {
-    return hvec3(fp16_ieee_from_fp32_value(v.x), fp16_ieee_from_fp32_value(v.y), fp16_ieee_from_fp32_value(v.z));
+    return hvec3(f32_to_f16(v.x), f32_to_f16(v.y), f32_to_f16(v.z));
 }
 
 static inline vec3 hvec3_to_vec3(const hvec3& v) {
-    return vec3(fp16_ieee_to_fp32_value(v.x), fp16_ieee_to_fp32_value(v.y), fp16_ieee_to_fp32_value(v.z));
+    return vec3(f16_to_f32(v.x), f16_to_f32(v.y), f16_to_f32(v.z));
 }
 
 void CUDASolver::initialize(const Ref<const Scene>& scene) {
@@ -53,7 +69,7 @@ void CUDASolver::initialize(const Ref<const Scene>& scene) {
             cudaPatch = {
                 .vertices = patch.vertices,
                 .vertexCount = patch.vertexCount,
-                .area = fp16_ieee_from_fp32_value(patch.area),
+                .area = f32_to_f16(patch.area),
                 .faceId = patch.face != nullptr ? static_cast<u32>(patch.face - m_scene->faces().data()) : CUDAStructs::NULL_ID};
         }
     }

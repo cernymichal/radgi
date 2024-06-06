@@ -4,6 +4,10 @@
 #include "Utils/Math.h"
 #include "Utils/Scalars.h"
 
+#define USE_FP16
+
+#ifdef USE_FP16
+
 #ifdef __CUDACC__
 
 #include <cuda_fp16.h>
@@ -15,6 +19,12 @@ typedef half f16;
 typedef u16 f16;
 
 #endif  // __CUDACC__
+
+#else
+
+typedef f32 f16;
+
+#endif  // USE_FP16
 
 typedef glm::vec<3, f16> hvec3;
 
