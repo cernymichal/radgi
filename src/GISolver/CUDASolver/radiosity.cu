@@ -7,6 +7,9 @@
 
 using namespace CUDAStructs;
 
+#define USE_PAIR_GATHER
+// #define USE_WAVE_GATHER
+
 __device__ vec3 randomPointOnPatch(const Patch& patch, RNG& rng) {
     auto u = rng();
     if (patch.vertexCount == 3) {
@@ -17,7 +20,7 @@ __device__ vec3 randomPointOnPatch(const Patch& patch, RNG& rng) {
 
     auto edge0 = patch.vertices[1] - patch.vertices[0];
     auto edge1 = patch.vertices[3] - patch.vertices[0];
-    return patch.vertices[0] + u * edge0 + rng() * edge1;  // TODO this is wrong
+    return patch.vertices[0] + u * edge0 + rng() * edge1;  // TODO this is a little wrong
 }
 
 __device__ f32 calculateFormFactor(const Patch& patchA, const Patch& patchB, const Scene& scene, RNG& rng) {
@@ -72,7 +75,7 @@ __device__ __forceinline__ void atomicAdd(hvec3* target, const hvec3& value) {
     atomicAdd(&target->z, value.z);
 }
 
-__global__ void gather(const uvec2 lightmapSize, hvec3* lightmap, const hvec3* residues, hvec3* nextResidues, const Scene scene, const u32 rngSeed, u32 threadQuota) {
+__global__ void gatherPair(const uvec2 lightmapSize, hvec3* lightmap, const hvec3* residues, hvec3* nextResidues, const Scene scene, const u32 rngSeed, u32 threadQuota) {
     u64 threadId = blockIdx.x * blockDim.x + threadIdx.x;
     u64 patchCount = lightmapSize.x * lightmapSize.y;
 
@@ -99,7 +102,7 @@ __global__ void gather(const uvec2 lightmapSize, hvec3* lightmap, const hvec3* r
 
         auto& patchA = scene.patches[patchPair.x];
         auto& patchB = scene.patches[patchPair.y];
-        if (patchA.faceId == NULL_ID || patchB.faceId == NULL_ID)
+        if (patchA.faceId == NULL_ID || patchB.faceId == NULL_ID || patchA.faceId == patchB.faceId)
             continue;
 
         hvec3 patchAResidue = residues[patchPair.x];
@@ -124,6 +127,88 @@ __global__ void gather(const uvec2 lightmapSize, hvec3* lightmap, const hvec3* r
         atomicAdd(&nextResidues[patchPair.y], deltaRadB);
         atomicAdd(&lightmap[patchPair.y], deltaRadB);
     }
+}
+
+__global__ void gatherWave(const uvec2 lightmapSize, hvec3* lightmap, const hvec3* residues, hvec3* nextResidues, const Scene scene, const u32 rngSeed, u32 wave) {
+    u64 threadId = blockIdx.x * blockDim.x + threadIdx.x;
+    u64 patchCount = lightmapSize.x * lightmapSize.y;
+
+    glm::vec<2, u64> patchPair = {threadId, threadId + wave + 1};
+    if (patchPair.x >= patchCount || patchPair.y >= patchCount)
+        return;
+
+    RNG rng(rngSeed + threadId);
+
+    auto& patchA = scene.patches[patchPair.x];
+    auto& patchB = scene.patches[patchPair.y];
+    if (patchA.faceId == NULL_ID || patchB.faceId == NULL_ID || patchA.faceId == patchB.faceId)
+        return;
+
+    hvec3 patchAResidue = residues[patchPair.x];
+    hvec3 patchBResidue = residues[patchPair.y];
+    if (patchAResidue == hvec3(0) && patchBResidue == hvec3(0))
+        return;
+
+    // check if the patches are facing each other
+    auto sightLine = glm::normalize(patchB.vertices[0] - patchA.vertices[0]);
+    if (glm::dot(sightLine, scene.faces[patchA.faceId].normal) <= 0 || glm::dot(-sightLine, scene.faces[patchB.faceId].normal) <= 0)
+        return;
+
+    f16 F = calculateFormFactor(patchA, patchB, scene, rng);
+    if (F <= static_cast<f16>(0.0001f))
+        return;
+
+    auto deltaRadA = scene.materials[scene.faces[patchA.faceId].materialId].albedo * patchBResidue * F * patchB.area;
+    auto deltaRadB = scene.materials[scene.faces[patchB.faceId].materialId].albedo * patchAResidue * F * patchA.area;
+
+    nextResidues[patchPair.x] += deltaRadA;
+    lightmap[patchPair.x] += deltaRadA;
+    nextResidues[patchPair.y] += deltaRadB;
+    lightmap[patchPair.y] += deltaRadB;
+}
+
+__global__ void gather(const uvec2 lightmapSize, hvec3* lightmap, const hvec3* residues, hvec3* nextResidues, const Scene scene, const u32 rngSeed) {
+    uvec2 destinationST = uvec2(blockIdx.x * blockDim.x + threadIdx.x, blockIdx.y * blockDim.y + threadIdx.y);
+    if (glm::any(destinationST >= lightmapSize))
+        return;
+
+    // TODO remove xy coordinates
+
+    auto destinationIdx = destinationST.y * lightmapSize.x + destinationST.x;
+    auto& destination = scene.patches[destinationIdx];
+
+    if (destination.faceId == NULL_ID)
+        return;  // nothing to solve
+
+    RNG rng(rngSeed + destinationIdx);
+
+    hvec3 deltaRad = hvec3(0);
+
+    auto shooterST = uvec2(0, 0);
+    for (shooterST.y = 0; shooterST.y < lightmapSize.y; shooterST.y++) {
+        for (shooterST.x = 0; shooterST.x < lightmapSize.x; shooterST.x++) {
+            auto shooterIdx = shooterST.y * lightmapSize.x + shooterST.x;
+            auto& shooter = scene.patches[shooterIdx];
+            auto shooterResidue = residues[shooterIdx];
+            if (shooter.faceId == NULL_ID || shooterIdx == destinationIdx || shooter.faceId == destination.faceId || shooterResidue == hvec3(0))
+                continue;
+
+            // check if the patches are facing each other
+            auto sightLine = glm::normalize(shooter.vertices[0] - destination.vertices[0]);
+            if (glm::dot(sightLine, scene.faces[destination.faceId].normal) <= 0 || glm::dot(-sightLine, scene.faces[shooter.faceId].normal) <= 0)
+                continue;
+
+            f16 F = calculateFormFactor(shooter, destination, scene, rng);
+            if (F <= static_cast<f16>(0.0001f))
+                continue;
+
+            deltaRad += shooterResidue * F * shooter.area;
+        }
+    }
+
+    deltaRad *= scene.materials[scene.faces[destination.faceId].materialId].albedo;
+    nextResidues[destinationIdx] += deltaRad;
+    lightmap[destinationIdx] += deltaRad;
 }
 
 __global__ void initTextures(uvec2 lightmapSize, hvec3* lightmap, hvec3* residues, hvec3* nextResidues, const Scene scene) {
@@ -182,7 +267,9 @@ extern "C" hvec3* solveRadiosityCUDA(u32 bounces, uvec2 lightmapSize, const Scen
     checkCUDAError(cudaDeviceSynchronize());
     checkCUDAError(cudaPeekAtLastError());
 
-    u32 threadQuota = static_cast<u32>(glm::max(1.0, 0.003 * (lightmapSize.x * lightmapSize.y) - 195.608));
+#if defined(USE_PAIR_GATHER)
+
+    u32 threadQuota = static_cast<u32>(glm::max(1.0, 0.003 * (lightmapSize.x * lightmapSize.y) - 195.608));  // magic function to determine thread quota
     u64 kernelCount = u64(lightmapSize.x * lightmapSize.y) * (lightmapSize.x * lightmapSize.y - 1) / 2 / threadQuota;
     printf("Thread quota: %d\n", threadQuota);
     printf("Thread count: %llu\n", kernelCount);
@@ -192,11 +279,44 @@ extern "C" hvec3* solveRadiosityCUDA(u32 bounces, uvec2 lightmapSize, const Scen
     // gather
     for (size_t bounce = 0; bounce < bounces; bounce++) {
         u32 rngSeed = static_cast<u32>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
-        gather<<<blocks, blockSize>>>(lightmapSize, lightmapDevice, residuesDevice, nextResiduesDevice, sceneDevice, rngSeed, threadQuota);
+        gatherPair<<<blocks, blockSize>>>(lightmapSize, lightmapDevice, residuesDevice, nextResiduesDevice, sceneDevice, rngSeed, threadQuota);
 
         std::swap(residuesDevice, nextResiduesDevice);
         cudaMemset(nextResiduesDevice, 0, lightmapSize.x * lightmapSize.y * sizeof(hvec3));
     }
+
+#elif defined(USE_WAVE_GATHER)
+
+    u32 patchCount = lightmapSize.x * lightmapSize.y;
+    blockSize = 256;
+
+    // TODO if too little blocks, use a different kernel
+
+    // gather
+    for (size_t bounce = 0; bounce < bounces; bounce++) {
+        u32 rngSeed = static_cast<u32>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+        for (u32 wave = 0; patchCount - wave - 1 >= 1; wave++) {
+            blocks = static_cast<u32>(ceil((patchCount - wave - 1) / static_cast<f64>(blockSize.x)));
+            gatherWave<<<blocks, blockSize>>>(lightmapSize, lightmapDevice, residuesDevice, nextResiduesDevice, sceneDevice, rngSeed, wave);
+        }
+
+        std::swap(residuesDevice, nextResiduesDevice);
+        cudaMemset(nextResiduesDevice, 0, lightmapSize.x * lightmapSize.y * sizeof(hvec3));
+    }
+
+#else  // simple per patch gather
+
+    // gather
+    for (size_t bounce = 0; bounce < bounces; bounce++) {
+        u32 rngSeed = static_cast<u32>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+        gather<<<blocks, blockSize>>>(lightmapSize, lightmapDevice, residuesDevice, nextResiduesDevice, sceneDevice, rngSeed);
+
+        std::swap(residuesDevice, nextResiduesDevice);
+        cudaMemset(nextResiduesDevice, 0, lightmapSize.x * lightmapSize.y * sizeof(hvec3));
+    }
+
+#endif
+
     checkCUDAError(cudaDeviceSynchronize());
     checkCUDAError(cudaPeekAtLastError());
 

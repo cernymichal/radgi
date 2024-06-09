@@ -4,7 +4,7 @@
 #include "Utils/Math.h"
 #include "Utils/Scalars.h"
 
-#define USE_FP16
+// #define USE_FP16
 
 #ifdef USE_FP16
 
