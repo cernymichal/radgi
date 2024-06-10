@@ -78,6 +78,7 @@ target_sources (${PROJECT_NAME} PRIVATE
     src/Utils/Random.h
     src/Utils/Scalars.h
 
+    src/GISolver/CUDASolver/configuration.h
     src/GISolver/CUDASolver/CUDASolver.cpp
     src/GISolver/CUDASolver/CUDASolver.h
     src/GISolver/CUDASolver/CUDAStructs.h

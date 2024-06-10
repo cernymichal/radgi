@@ -3,8 +3,7 @@
 #include "Utils/Log.h"
 #include "Utils/Math.h"
 #include "Utils/Scalars.h"
-
-// #define USE_FP16
+#include "configuration.h"
 
 #ifdef USE_FP16
 

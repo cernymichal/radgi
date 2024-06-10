@@ -99,11 +99,19 @@ Texture<vec3> CUDASolver::solve() {
 
     hvec3* f16Lightmap = solveRadiosityCUDA(m_bounces, m_lightmapSize, sceneHost);
 
+#ifdef USE_FP16
+
     vec3* f32Lightmap = new vec3[m_lightmapSize.x * m_lightmapSize.y];
     for (u32 i = 0; i < m_lightmapSize.x * m_lightmapSize.y; i++)
         f32Lightmap[i] = hvec3_to_vec3(f16Lightmap[i]);
 
     delete[] f16Lightmap;
+
+#else
+
+    vec3* f32Lightmap = reinterpret_cast<vec3*>(f16Lightmap);
+
+#endif
 
     return Texture<vec3>(m_scene->lightmapSize(), std::move(f32Lightmap));
 }

@@ -7,9 +7,6 @@
 
 using namespace CUDAStructs;
 
-#define USE_PAIR_GATHER
-// #define USE_WAVE_GATHER
-
 __device__ vec3 randomPointOnPatch(const Patch& patch, RNG& rng) {
     auto u = rng();
     if (patch.vertexCount == 3) {
