@@ -1,0 +1,249 @@
+\documentclass[czech]{pyt-report}
+
+\usepackage[utf8]{inputenc}
+
+\usepackage{amsmath}
+
+\usepackage{algorithm,algpseudocode}
+\makeatletter
+\renewcommand{\ALG@name}{Algoritmus}
+\makeatother
+
+\usepackage{multirow}
+\usepackage{threeparttable}
+\usepackage{array}
+\newcommand{\PreserveBackslash}[1]{\let\temp=\\#1\let\\=\temp}
+\newcolumntype{C}[1]{>{\PreserveBackslash\centering}p{#1}}
+\newcolumntype{R}[1]{>{\PreserveBackslash\raggedleft}p{#1}}
+\newcolumntype{L}[1]{>{\PreserveBackslash\raggedright}p{#1}}
+
+\graphicspath{{./images/}}
+
+\title{CUDA akcelerovaný řešič radiosity}
+
+\author{Michal Černý}
+\affiliation{FIT ČVUT}
+\email{cernym65@fit.cvut.cz}
+
+\def\file#1{{\tt#1}}
+
+\begin{document}
+
+\maketitle
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Úvod}
+\label{sec:uvod}
+
+Tato zpráva se věnuje semestrální práci předmětu NI-GPU v letním semestru 2023/24 zaměřené na řešení globální iluminace pomocí radiosity. Výstupem je implementace několika metod jak na CPU tak GPU s využitím technologie CUDA.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Radiosita}
+\label{sec:radiosita}
+
+%     Definice problému
+%     Popis sekvenčního algoritmu a jeho implementace
+
+\subsection{Definice problému}
+\label{sec:radiosita-def}
+
+Při vykreslování scény v počítačové grafice potřebujeme pro každý viditelný bod zjistit, kolik světla odráží směrem do kamery. Tento problém vyjadřuje tzv. \textit{Rendering equation}, kterou lze upravit na tuto podobu (zjednodušeno):
+
+$$ L_o = L_e + \int_\Omega L_d \,d\omega + \int_\Omega L_i \,d\omega $$
+
+Počítané přicházející světlo $L_o$ lze rozdělit na 3 komponenty:
+
+\begin{itemize}
+  \item $L_e$ - světlo vyzářené materiálem,
+  \item $L_d$ - přímo odražené světlo přicházející z jiného zdroje světla a
+  \item $L_i$ - nepřímo odražené světlo, které přichází z okolních objektů.
+\end{itemize}
+
+V tradiční real-time počítačové grafice se potom často využívá právě tohoto rozdělení a dynamicky se počítá pouze přímo odražené světlo. Nepřímo odražené světlo, pro které je potřeba spočítat více odrazů ve scéně, se předpočítá a při vykreslování se kombinuje s dynamickým přímým. Tato nepřímo odražená složka se poté nazývá \textit{Global illumination}.
+
+\begin{figure}[h]
+  \centering\leavevmode
+  \includegraphics[width=.90\linewidth]{./images/test_scene_4x512.png}\vskip-0.5cm
+  \bigskip
+  \caption{Vyřešená globální iluminace ve scéně se třemi bílými světly}
+  \smallskip
+  \small test\_scene 512x512, 4 iterace/odrazy
+  \label{fig:test_scene}
+\end{figure}
+
+Jedna z metod na spočítání globální iluminace je Radiosita. Scéna se rozdělí na mnoho plošek. Světlo na této plošce lze poté vyjádřit pomocí lineární rovnice sčítající světlo ve všech ostatních plochách vážené tzv. \textit{form factorem}, ten vyjadřuje vzájemnou viditelnost ploch ve scéně. Tento faktor ale kvůli náročnosti většinou pouze aproximujeme, zde také leží nejnáročnější část problému. Světlo v ploškách tak tvoří systém lineárních rovnic, po jehož vyřešení získáme požadovanou nepřímo odraženou složku pro naši scénu jimi diskretizovanou.~\cite{Cohen1993}
+
+\subsection{Form factor}
+\label{sec:radiosita-form}
+
+Pro dvojice různých geometrických objektů existuje mnoho numerických i analytických způsobů jak form factor spočítat. Ve vší obecnosti se jedná o dvojitý integrál přes obě plochy a analytická řešení existují pouze pro speciální případy, nebo s omezeními. V minulosti se využívalo tzv. \textit{Hemicube} metody, kde se celá scéna vykreslí z pohledu jedné plochy do textur na 5 stran "polokrychle". V texturách spočítá počet pixelů odpovídající jednotlivým ploškám a z jejich poměru vůči celé scéně vzniká hledaný faktor.~\cite{CastanoHemicube} Tento přístup se využíval hlavně kvůli omezení programovatelnosti grafických karet a využíval tak dostupný rasterizační pipeline.
+
+Pro jednoduchost a obecnost jsme zvolili aproximaci integrálů pomocí metody Monte Carlo. Algoritmus zvolí náhodné body na dvojici ploch, zjistí jestli paprsek mezi nimi není ve scéně přerušen, a spočítá příspěvek vzorku s ohledem na délku a úhel paprsku vůči plochám. Těchto vzorků algoritmus dělá několik a zhruba tak odhaduje vzájemnou viditelnost plošek.\cite{DutreCompendium}
+
+Implementace také využívá k akceleraci hledání průniků paprsků se scénou naivní implementaci BVH~\cite{Shirley2024RTW2} - pomocný strom rozdělující prostor s polygony. Algoritmus hledání průniků tak nemusí procházet všechny plochy scény lineárně, ale pouze v $O(\log_2n)$.
+
+\subsection{Lightmapping}
+\label{sec:radiosita-lightmapping}
+
+Pro uložení předpočítané globální iluminace se nejčastěji využívá tzv. \textit{lightmapa}. Jedná se o texturu mapovanou na celou geometrii (mesh) scény. Zajištění optimálního mapování je další komplikovaný problém, ale naše implementace počítá s už připravenými souřadnicemi např. z aplikace pro 3D modelování. Každý okupovaný texel v této texturě poté odpovídá naší plošce, často se tak jedná o uniformní grid na plochách scény. Tato distribuce nemusí být vždy ideální a nebere ohled na využití rozlišení, kde je potřeba zachytit změnu osvětlení. Metody nevyužívající lightmapy, ale meshe pro vytvoření plošek a uložení GI, mohou být schopny plochy dynamicky dělit v průběhu výpočtu podle potřeby. Lightmapy jsou i přesto to de facto standard, hlavně díky jednoduchosti jejich vzorkování při vykreslování.
+
+\subsection{Paměťová náročnost problému}
+\label{sec:radiosita-pamet}
+
+Systém lineárních rovnic radiosity je nutno řešit bez jeho celého uložení kvůli paměťové náročnosti i běžných případů. Ani samotné form faktory není možné cachovat, protože jejich počet roste s $O(n^2)$.\footnote{Pokud bychom je pro lightmapu velikosti 1024x1024 uložili v poloviční přesnosti (FP16) dosáhli bychom objemu 1TB.}
+
+\subsection{Řešení gatherováním}
+\label{sec:radiosita-gather}
+
+\begin{algorithm}[H]
+\caption{Gatherování radiosity~\cite{Cohen1993}}\label{alg:fabrik}
+\begin{algorithmic}[1]
+\State Do lightmapy zapiš hodnotu vyzařování každé plošky.
+\State Každé plošce nastav reziduum odpovídající jeho vyzařování.
+\For{počet iterací algoritmu}
+    \For{dvojice plošek A a B}
+        \State Spočti form factor mezi ploškami.
+        \State Z rezidua spočti přenos radiosity pro obě plošky.
+        \State Přičti přenos do lightmapy a k reziduu plošek pro příští iteraci.
+    \EndFor
+    \State Nastav rezidua pro příští iteraci na současnou
+\EndFor
+\end{algorithmic}
+\end{algorithm}
+
+Algoritmus k funkci využívá ještě mapu reziduí - nevyzářené energie z plošek, kterou v každé iteraci vyzařuje do scény. Tento přístup odpovídá Gauss-Seidelově metodě pro řešení SLR, nebo ji lze také chápat jako simulaci jednotlivých odrazů světla ve scéně.\footnote{Řešení první iterace odpovídá přímému osvětlení.} V naší implementaci je navíc paralelizován pomocí OpenMP.
+
+\begin{figure}[h]
+  \centering\leavevmode
+  \includegraphics[width=.475\linewidth]{./images/cornell_box_output.png}
+  \includegraphics[width=.475\linewidth]{./images/cornell_box_reference.png}\vskip-0.5cm
+  \bigskip
+  \caption{Porovnání výstupu algoritmu (vlevo) s referenčním řešením tzv. Cornell Boxu}
+  \label{fig:cornell_box}
+\end{figure}
+
+\subsection{Progresivní řešení}
+\label{sec:radiosita-prog}
+
+Další populární metodou je progresivní iterování, které bere ohled na velikost rezidua plošek. Algoritmus místo procházení všech dvojic v každé iteraci zvolí plochu s největším reziduem a uskuteční přenos pouze z ní do scény.~\cite{Cohen1993} Rychleji tak konverguje k použitelnému řešení, ale není možné ho paralelizovat.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Implementace CUDA řešení}
+\label{sec:cuda}
+
+Řešení problému za pomoci GPU začíná stejným předpočítáním rozdělení scény na plošky a vytvoření BVH jako na CPU. Na GPU je poté nahráno 2D pole plošek, pole trojúhelníků scény, pole materiálů scény, pomocný BVH strom zarovnaný do pole a vytvořeny 2D pole pro lightmapu a pole reziduí. Pro vrcholy scény je běžně nutné použít 32b float, ale pro barvy, a tudíž i akumulované světlo, byla také prozkoumána možnost použití 16b floatů. (FP16)
+
+Implementovány byly dvě verze rozdělení řešení pomocí gatherování: pro každou plošku a pro každou kombinaci dvou plošek. Algoritmus v jedné iteraci (odrazu) nemá žádnou závislost na vlastních výsledcích, ale je omezený současným sčítáním výsledků pro každou plošku do lightmapy a pole reziduí.
+
+\subsection{Pro každou plošku}
+\label{sec:cuda-plosky}
+
+Kernel je spouštěn s jedním vláknem pro každou plošku ve scéně. Ty samostatně projdou všechny ostatní a nastřádají případně přijaté světlo. Poté jsou výsledky zapsány do lightmapy a pole reziduí pro sebe sama, nevznikají tak žádné souběhy.
+
+\subsection{Pro každou dvojici plošek}
+\label{sec:cuda-dvojice}
+
+Zřejmým nedostatkem předchozího řešení je prakticky dvojnásobný objem práce, jelikož je form factor - nejnáročnější část výpočtu - symetrický pro obě plošky vyměňující si světelnou energii, stačí ho spočítat pouze jednou a přenos rovnou uskutečnit pro obě strany. Kernel je spouštěn pro každou možnou dvojici plošek, tudíž $n^2 / 2$, kvůli rychle rostoucímu počtu spouštěných vláken se také vláknům postupně přiděluje více práce než pouze jedna dvojice. Zde  vzniká problém více vláken přičítajících na jedno místo v globální paměti, ten je potlačen použitím atomických operací.
+
+Atomické sčítání je zde jasný bod blokující vlákna, a proto byla implementována i verze pracující s dvojicemi pouze unikátních plošek. Zde je výpočet rozdělen do velkého počtu spuštění kernelu: $n$-krát s klesajícím počtem vláken až k jednomu.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Testování}
+\label{sec:test}
+
+Testovány byly tři výše zmíněné metody rozdělení práce na třech scénách s rozdílnou komplexitou: cornell\_box~(32 trojúhelníků), test\_scene~(266 trojúhelníků) a sponza~(56~438 trojúhelníků).
+
+\begin{figure}[h]
+  \centering\leavevmode
+  \includegraphics[width=.90\linewidth]{./images/sponza_4x512.png}\vskip-0.5cm
+  \bigskip
+  \caption{Výstup pro scénu sponza}
+  \smallskip
+  \small sponza 512x512, 4 iterace/odrazy
+  \label{fig:sponza}
+\end{figure}
+
+\begin{table*}
+\centering
+\begin{threeparttable}
+\caption{Testování CUDA implementace}
+\label{table:test-cuda}
+\begin{tabular}{|L{2cm}|C{1.5cm}||R{1.5cm}|R{1.5cm}|R{1.5cm}|R{1.5cm}|R{1.5cm}|R{1.5cm}|}
+\hline
+&  & \multicolumn{2}{|c|}{gather} & \multicolumn{2}{|c|}{dvojice} & \multicolumn{2}{|c|}{unikátní dvojice} \\
+\hline
+\multicolumn{1}{|c|}{Scéna} & Rozlišení & \multicolumn{1}{|c|}{FP16} & \multicolumn{1}{|c|}{FP32} & \multicolumn{1}{|c|}{FP16} & \multicolumn{1}{|c|}{FP32} & \multicolumn{1}{|c|}{FP16} & \multicolumn{1}{|c|}{FP32} \\
+\hline
+\multirow{4}{0pt}{cornell\_box} 
+& 64x64   &   0.33 &   0.39 &    0.65 &   0.17 &    0.71 &    0.69 \\
+& 128x128 &   0.91 &   1.03 &   15.98 &   0.61 &    2.29 &    2.50 \\
+& 256x256 &   6.50 &   6.62 &  268.95 &   5.66 &   11.69 &   12.12 \\
+& 512x512 &  82.00 &  89.55 & >900.00 & 132.10 &   77.24 &   89.05 \\
+\hline
+\multirow{4}{0pt}{test\_scene}
+& 64x64   &   1.20 &   1.29 &    0.46 &   0.41 &    2.93 &    2.56 \\
+& 128x128 &   6.17 &   6.49 &    7.30 &   3.26 &   12.91 &   12.35 \\
+& 256x256 &  51.95 &  55.86 &   67.83 &  31.82 &   81.12 &   77.39 \\
+& 512x512 & 526.82 & 572.20 &  907.07 & 949.53 &  697.24 &  564.04 \\
+\hline
+\multirow{4}{0pt}{sponza}
+& 64x64   &   7.59 &   7.75 &    1.36 &   1.61 &   18.14 &   17.05 \\
+& 128x128 &  28.64 &  38.04 &   10.40 &  11.98 &   81.80 &   62.68 \\
+& 256x256 & 118.58 & 105.44 &   64.04 &  54.91 &  319.96 &  268.57 \\
+& 512x512 & 712.21 & 799.77 & >900.00 & 753.56 & >900.00 & >900.00 \\
+\hline
+\end{tabular}
+{\small v sekundách, 4 iterace/odrazy, NVIDIA GeForce RTX 4050 55W}
+\end{threeparttable}
+\end{table*}
+
+\begin{table*}
+\centering
+\begin{threeparttable}
+\caption{Testování OpenMP implementace na CPU}
+\label{table:test-cpu}
+\begin{tabular}{|L{3cm}|C{2cm}||R{3cm}|}
+\hline
+\multicolumn{1}{|c|}{Scéna} & Rozlišení & \multicolumn{1}{|c|}{gather} \\
+\hline
+\multirow{3}{0pt}{cornell\_box} 
+& 64x64   &   0.88 \\
+& 128x128 &  10.12 \\
+& 256x256 & 174.32 \\
+\hline
+\multirow{3}{0pt}{test\_scene}
+& 64x64   &   6.62 \\
+& 128x128 &  41.81 \\
+& 256x256 & 632.55 \\
+\hline
+\multirow{3}{0pt}{sponza}
+& 64x64   &  11.58 \\
+& 128x128 & 112.65 \\
+& 256x256 & 616.97 \\
+\hline
+\end{tabular}
+{\small v sekundách, 4 iterace/odrazy, Intel Core i7-13700H}
+\end{threeparttable}
+\end{table*}
+
+Z tabulky č. \ref{table:test-cuda} je patrné, že mezi přístupy vítězí rozdělení na dvojice. Bohužel ale s roustoucím rozlišením roste i počet vláken, který se musí vejít do 32b integeru, nabývá práce pro jedno vlákno a horší se výkon. Patrné je také značné zpomalení při použití 16b floatu s touto metodou, vzniká kvůli atomickému sčítání, které je nejspíše uskutečněno optimálněji pro typy zarovnané na 32b.
+
+Nejoptimálnější metodou by měla být iterace unikátních dvojic, tu ale zdržují pozdější spouštění, kterým se nedaří procesory GPU dostatečně zaplnit.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Závěr}
+\label{sec:zaver}
+
+%    Závěr
+%    Literatura
+
+Současná implementace je velmi omezena procházením scény pro výpočet form factoru, způsobující vysokou divergenci a velmi roztříštěný přístup do paměti. Pro další rozšíření je tedy zejména nutné zde implementovat co nejvýkonější metodu, např. Ylitie~2017~\cite{10.1145/3105762.3105773}. Další potenciální zlepšení by mohla nabídnout implementace specializovaných formátů pro uchování barev ve vysokém rozsahu, např. formát RGB9\_E5, který do 32b pro každou složku uloží 9b mantissu spolu se sdíleným 5b exponentem, efektivně tak dosáhne podobného rozsahu jako 16b float~\cite{EXT_texture_shared_exponent}.
+
+Podstatný rozdíl oproti seriózním řešičům radiosity je také použití plného rozlišení lightmapy pro celý výpočet. Existují metody pro postupné dělení plošek podle potřeby, např. podle okraje stínu, nebo naopak snižování rozlišení pro pozdější fáze, kde už jsou jen velmi jemné rozdíly.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% --- Bibliography
+%\bibliographystyle{plain-cz-online}
+\bibliography{reference}
+
+\end{document}
