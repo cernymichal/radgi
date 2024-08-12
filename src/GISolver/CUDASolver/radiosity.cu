@@ -59,7 +59,7 @@ __device__ f32 calculateFormFactor(const Patch& patchA, const Patch& patchB, con
 
         f32 r2 = glm::length2(rayTarget - rayOrigin);
         f32 cosines = glm::dot(rayDirection, scene.faces[patchA.faceId].normal) * glm::dot(-rayDirection, scene.faces[patchB.faceId].normal);
-        f32 deltaF = cosines / (pi_v<f32> * r2);
+        f32 deltaF = cosines / (PI * r2);
         F += glm::max(deltaF, 0.0f);
     }
 

@@ -4,6 +4,17 @@ void Scene::initialize(const uvec2& lightmapSize) {
     m_lightmapSize = lightmapSize;
 
     m_bvh.build();
+    const auto& stats = m_bvh.stats();
+    LOG(std::format(
+        "BVH\n\tbuildTime\t\t= {}ms\n\tfaceCount\t\t= {}\n\tnodeCount\t\t= {}\n\tleafCount\t\t= {}\n\tmaxDepth\t\t= {}\n\tavgFacesPerLeaf\t= {}\n\tmaxFacesPerLeaf\t= {}",
+        stats.buildTime.count() / 1000.0f,
+        stats.faceCount,
+        stats.nodeCount,
+        stats.leafCount,
+        stats.maxDepth,
+        (f32)stats.faceCount / stats.leafCount,
+        stats.maxFacesPerLeaf));
+
     createPatches();
 }
 

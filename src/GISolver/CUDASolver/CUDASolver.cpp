@@ -80,7 +80,9 @@ void CUDASolver::initialize(const Ref<const Scene>& scene) {
 
         cudaNode = {
             .aabb = node.aabb,
-            .face = node.face};
+            .faceCount = node.faceCount,
+            .childIndex = node.childIndex,  // ==  .faceIndex = node.faceIndex
+        };
     }
 }
 

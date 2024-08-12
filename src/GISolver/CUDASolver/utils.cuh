@@ -30,43 +30,45 @@ struct RNG {
     }
 };
 
+constexpr u32 BVH_MAX_DEPTH = 32;
+
 __device__ bool intersectsBVH(const Scene& scene, const vec3& rayOrigin, const vec3& rayDirection, const Interval<f32>& tInterval, const u32 excludedFaces[2]) {
     vec3 rayDirectionInv = 1.0f / rayDirection;
 
-    u32 stack[64];
-    i32 stackSize = 0;
+    std::array<u32, BVH_MAX_DEPTH> stack;
+    u32 stackSize = 0;
     stack[stackSize++] = 0;
 
-    while (stackSize > 0) {
-        auto node = stack[--stackSize];
-        auto faceId = scene.bvh.nodes[node].face;
+    while (stackSize != 0) {
+        u32 nodeIndex = stack[--stackSize];
+        const BVH::Node& node = scene.bvh.nodes[nodeIndex];
 
-        if (faceId != u32(-1)) {
-            const auto& face = scene.faces[faceId];
+        auto nodeIntersection = rayAABBintersection(rayOrigin, rayDirectionInv, node.aabb);
+        if (isnan(nodeIntersection.min) || tInterval.intersection(nodeIntersection).length() < 0)
+            continue;
 
-            auto t = rayTriangleIntersection(rayOrigin, rayDirection, face.vertices);
+        if (node.faceCount != 0) {
+            // Leaf node
+            for (u32 i = node.faceIndex; i < node.faceIndex + node.faceCount; i++) {
+                if (i == excludedFaces[0] || i == excludedFaces[1])
+                    continue;
 
-            if (!isnan(t) && tInterval.contains(t) && faceId != excludedFaces[0] && faceId != excludedFaces[1])
-                return true;
+                const Face& face = scene.faces[i];
+                auto [t, barycentric] = rayTriangleIntersection(rayOrigin, rayDirection, face.vertices[0], face.vertices[1], face.vertices[2], false);
+                if (!isnan(t) && tInterval.surrounds(t))
+                    return true;
+            }
 
             continue;
         }
 
-        if (node >= scene.bvh.nodeCount / 2)  // Leaf node
-            continue;
+        // Add children to stack
+        stack[stackSize++] = node.childIndex;
+        stack[stackSize++] = node.childIndex + 1;
 
-        auto [tNear, tFar] = rayAABBintersection(rayOrigin, rayDirectionInv, scene.bvh.nodes[node].aabb);
-        if (isnan(tNear) || tNear > tInterval.max || tFar < tInterval.min)
-            continue;
-
-        auto leftChild = 2 * node + 1;
-        auto rightChild = 2 * node + 2;
-        stack[stackSize++] = rightChild;
-        stack[stackSize++] = leftChild;
-
-// #define DEBUG_BVH_STACK
+        // #define DEBUG_BVH_STACK
 #ifdef DEBUG_BVH_STACK
-        if (stackSize >= 64) {
+        if (stackSize >= BVH_MAX_DEPTH) {
             printf("BVH traversal stack overflow\n");
             return false;
         }

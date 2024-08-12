@@ -59,8 +59,12 @@ struct Patch {
 
 struct BVH {
     struct Node {
-        AABB aabb = AABB::empty();
-        u32 face = u32(-1);
+        AABB aabb;
+        u32 faceCount;
+        union {              // Either faceIndex or childIndex if faceCount == 0
+            u32 faceIndex;   // First face
+            u32 childIndex;  // Left child
+        };
     };
 
     Node* nodes;

@@ -29,10 +29,8 @@ f32 calculateFormFactor(const Patch& patchA, const Patch& patchB, const Scene& s
 
 #define USE_BVH
 #ifdef USE_BVH
-        auto intersectionPredicate = [&](f32, const Face& face) {
-            return face != *patchA.face && face != *patchB.face;
-        };
-        bool hit = scene.bvh().intersects(rayOrigin, rayDirection, tInterval, intersectionPredicate);
+        const Face* excludeFaces[] = {patchA.face, patchB.face};
+        bool hit = scene.bvh().intersect(rayOrigin, rayDirection, tInterval, excludeFaces);
 #else
         bool hit = false;
         for (const auto& face : scene.faces()) {
@@ -55,7 +53,7 @@ f32 calculateFormFactor(const Patch& patchA, const Patch& patchB, const Scene& s
 
         f32 r2 = glm::length2(rayTarget - rayOrigin);
         f32 cosines = glm::dot(rayDirection, patchA.face->normal) * glm::dot(-rayDirection, patchB.face->normal);
-        f32 deltaF = cosines / (pi_v<f32> * r2);
+        f32 deltaF = cosines / (PI * r2);
         F += glm::max(deltaF, 0.0f);
     }
 

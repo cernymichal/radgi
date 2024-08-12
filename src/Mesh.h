@@ -10,20 +10,6 @@ struct Face {
     vec3 normal;
     std::array<vec2, 3> lightmapUVs;
     Ref<Material> material;
-    AABB aabb;  // only used for BVH construction
-
-    bool operator==(const Face& other) const {
-        return this == &other;
-    }
-
-    AABB calculateAABB() {
-        aabb = { vec3(std::numeric_limits<f32>::max()), vec3(std::numeric_limits<f32>::lowest()) };
-        for (const vec3& vertex : vertices) {
-            aabb.min = min(aabb.min, vertex);
-            aabb.max = max(aabb.max, vertex);
-        }
-        return aabb;
-    }
 };
 
 std::vector<Face> loadMesh(const std::filesystem::path& filePath);
